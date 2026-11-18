@@ -1,0 +1,18 @@
+[package]
+name = "shrimp-music"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crossbeam-channel = "0.5.17"
+directories = "6.0.0"
+image = { version = "0.25.10", features = ["jpeg", "png", "webp"] }
+lofty = "0.25.5"
+rand = "0.10.4"
+rubato = "5.1.0"
+rusqlite = { version = "0.43.0", features = ["bundled"] }
+sha2 = "0.11.1"
+symphonia = { version = "0.6.1", features = ["flac", "aac", "mp3", "alac", "isomp4"] }
+thiserror = "2.0.21"
+walkdir = "2.5.0"
+wasapi = "0.27.0"
