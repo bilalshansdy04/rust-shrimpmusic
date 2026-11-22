@@ -1,7 +1,23 @@
 [package]
-name = "shrimp-music"
-version = "0.1.0"
+name = "shrimp-music-player"
+version = "1.1.0"
 edition = "2024"
+authors = ["Bilal Shandyarta Syamsudin"]
+
+[lib]
+name = "shrimp_music"
+path = "src/lib.rs"
+
+[[bin]]
+name = "shrimp-music-player"
+path = "src/main.rs"
+
+[package.metadata.packager]
+product-name = "shrimp-music-player"
+version = "1.1.0"
+icons = ["assets/logo.ico"]
+publisher = "Bilal Shandyarta Syamsudin"
+description = "ShrimpMusic Player - Made by Bilal"
 
 [dependencies]
 crossbeam-channel = "0.5.17"
@@ -34,3 +50,4 @@ windows = { version = "0.62.2", features = [
 slint-build = "1.19.0"
 lucide-slint = "1.77.0"
 winres = "0.1"
+
