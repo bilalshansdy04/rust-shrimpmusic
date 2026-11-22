@@ -6,6 +6,13 @@ use shrimp_music::library::artwork::get_thumbnail_dir;
 use shrimp_music::ui::ShrimpMusicApp;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // If not explicitly overridden by user, prefer the software renderer for low RAM footprint (< 50 MB)
+    if std::env::var("SLINT_BACKEND").is_err() {
+        unsafe {
+            std::env::set_var("SLINT_BACKEND", "software");
+        }
+    }
+
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--headless" || a == "-h") {
         let _ = wasapi::initialize_mta();
