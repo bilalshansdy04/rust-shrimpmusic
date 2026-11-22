@@ -7,7 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--headless" || a == "-h") {
         let _ = wasapi::initialize_mta();
-        println!("=== ShrimpMusic Native v2.0 - Headless Status Check ===");
+        println!("=== ShrimpMusic - Headless Status Check ===");
 
         let dm = DeviceManager::new()?;
         let devices = dm.list_output_devices()?;
