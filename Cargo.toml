@@ -13,7 +13,7 @@ name = "shrimp-music-player"
 path = "src/main.rs"
 
 [package.metadata.packager]
-product-name = "shrimp-music-player"
+product-name = "ShrimpMusic Player"
 version = "1.1.0"
 icons = ["assets/logo.ico"]
 publisher = "Bilal Shandyarta Syamsudin"

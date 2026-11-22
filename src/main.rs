@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use shrimp_music::audio::{AudioPlayer, DeviceManager};
 use shrimp_music::db::{default_db_path, open_database};
 use shrimp_music::library::artwork::get_thumbnail_dir;
