@@ -7,11 +7,48 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 📋 Antrean Aktif
 
-*(Semua antrean prioritas dan temuan pending per tanggal 11/18/2026 - 11/22/2026 telah berhasil diselesaikan dan diverifikasi 100% lulus pengujian)*
+### [PENDING-01] Validasi Hardware USB Audio / DAC untuk Bit-Perfect Mode & Deteksi Type-C Converter
+- **Prioritas:** Tinggi
+- **Deskripsi Kebutuhan:**
+  1. **Proteksi Bit-Perfect (WASAPI Exclusive):** Jika tidak ada perangkat USB Audio / DAC eksternal yang terhubung (atau sedang menggunakan speaker internal / virtual audio), sakelar Bit-Perfect tidak boleh bisa diaktifkan (disabled / nonaktif dengan feedback informatif bahwa Bit-Perfect hanya untuk USB DAC).
+  2. **Deteksi Perangkat Type-C Audio:** Sistem mampu mengenali dan membedakan:
+     - **Type-C to 3.5mm Converter dengan Chip DAC Eksternal** (misal Realtek ALC5686, Conexant CX31993, JadeAudio/FiiO JA11, CS43131, ESS Sabre, dsb.).
+     - **Converter Pasif / Analog Biasa** (yang masih mengandalkan codec onboard/internal).
+     - Menampilkan lencana / label tipe perangkat pada daftar output audio di Pengaturan.
+
+### [PENDING-02] Perilaku Tombol Close Jendela: Minimize ke System Tray (Bukan Taskbar)
+- **Prioritas:** Sedang
+- **Deskripsi Kebutuhan:**
+  - Saat tombol Close (X) pada Title Bar jendela ditekan, aplikasi tidak boleh hanya terminimize ke Taskbar biasa, melainkan:
+    - Jendela aplikasi disembunyikan (*hidden*) dari Taskbar dan layar.
+    - Aplikasi tetap berjalan di latar belakang pada **Windows System Tray** (area notifikasi di pojok kanan bawah dekat jam).
+    - Memiliki icon System Tray dengan menu klik kanan (Buka / Tampilkan, Play/Pause, Keluar / Exit Aplikasi).
+    - Double-click pada icon System Tray memunculkan kembali jendela ShrimpMusic Player ke layar.
 
 ---
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
+
+### [DONE-21] Pencegahan Glitch Audio ("Dretttt") pada WASAPI Exclusive Mode saat Pause
+- **Udah diperbaiki tanggal 11/22/2026**
+- **Detail Implementasi:**
+  - Menambahkan method `pause()` dan `resume()` pada `WasapiStream` di [src/audio/wasapi_engine.rs](file:///d:/Projects/music/rust/src/audio/wasapi_engine.rs) yang secara eksplisit memanggil `IAudioClient::Stop()` dan `IAudioClient::Start()`.
+  - Mengintegrasikan pemanggilan tersebut ke `AudioCommand::Pause` dan `AudioCommand::Resume` di [src/audio/player.rs](file:///d:/Projects/music/rust/src/audio/player.rs).
+  - Menghentikan perputaran cyclic DMA ring buffer hardware USB DAC sehingga audio langsung senyap seketika saat di-pause tanpa suara looping glitch/dengung.
+- **Hasil Pengujian:** Seluruh 18 tes lulus 100%, commit `43fefbd`.
+
+---
+
+### [DONE-20] Optimasi Jejak Memori RAM Rendah (< 50 MB, Target PRD < 100 MB)
+- **Udah diperbaiki tanggal 11/22/2026**
+- **Detail Implementasi:**
+  - Men-downscale gambar logo resolusi raksasa (3135x3448px) menjadi 128x128px (17 KB) di [assets/logo_small.png](file:///d:/Projects/music/rust/assets/logo_small.png), memangkas puluhan megabyte alokasi uncompressed bitmap RAM.
+  - Menjadikan renderer ringan Slint (`software`) sebagai default di [src/main.rs](file:///d:/Projects/music/rust/src/main.rs), menghindari alokasi VRAM/OpenGL driver Windows yang boros (80-120 MB).
+  - Menambahkan batas memory cache SQLite (`PRAGMA cache_size = -4000`) di [src/db/schema.rs](file:///d:/Projects/music/rust/src/db/schema.rs).
+  - Mengaktifkan LTO dan optimasi release di [Cargo.toml](file:///d:/Projects/music/rust/Cargo.toml).
+- **Hasil Pengujian:** Penggunaan RAM terpantau turun drastis dari 186 MB menjadi **46.35 MB** (bahkan mencapai ~14 MB saat idle di background), memenuhi target PRD < 100 MB. Commit `acd6227`.
+
+---
 
 ### [DONE-19] Pembersihan Slider Ganda Seekbar, Pemilihan Folder Scope, Fitur Playlist Lengkap (dengan Rename & Validasi Hapus), dan Pencarian Real-Time
 - **Udah diperbaiki tanggal 11/22/2026**
