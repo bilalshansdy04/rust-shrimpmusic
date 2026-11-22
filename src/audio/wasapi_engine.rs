@@ -186,6 +186,16 @@ impl WasapiStream {
         self.channels * self.bytes_per_sample
     }
 
+    pub fn pause(&mut self) -> AudioResult<()> {
+        let _ = self.client.stop_stream();
+        Ok(())
+    }
+
+    pub fn resume(&mut self) -> AudioResult<()> {
+        let _ = self.client.start_stream();
+        Ok(())
+    }
+
     pub fn stop(&mut self) -> AudioResult<()> {
         let _ = self.client.stop_stream();
         let _ = self.client.reset_stream();

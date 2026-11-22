@@ -236,12 +236,18 @@ fn run_audio_worker(
                 AudioCommand::Pause => {
                     if state.player_state == PlayerState::Playing {
                         state.player_state = PlayerState::Paused;
+                        if let Some(ref mut stream) = state.stream {
+                            let _ = stream.pause();
+                        }
                         let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Paused));
                     }
                 }
                 AudioCommand::Resume => {
                     if state.player_state == PlayerState::Paused {
                         state.player_state = PlayerState::Playing;
+                        if let Some(ref mut stream) = state.stream {
+                            let _ = stream.resume();
+                        }
                         let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Playing));
                     }
                 }
