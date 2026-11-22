@@ -30,6 +30,7 @@ pub struct TrackRecord {
     pub has_lyrics: bool,
     pub play_count: u64,
     pub last_played_at: Option<i64>,
+    pub waveform: Option<Vec<f32>>,
     pub is_active: bool,
 }
 

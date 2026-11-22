@@ -9,10 +9,27 @@ directories = "6.0.0"
 image = { version = "0.25.10", features = ["jpeg", "png", "webp"] }
 lofty = "0.25.5"
 rand = "0.10.4"
+rfd = "0.18.0"
 rubato = "5.1.0"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 sha2 = "0.11.1"
+slint = "1.19.0"
+i-slint-backend-winit = "1.19.0"
 symphonia = { version = "0.6.1", features = ["flac", "aac", "mp3", "alac", "isomp4"] }
 thiserror = "2.0.21"
 walkdir = "2.5.0"
 wasapi = "0.27.0"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Com",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+] }
+
+[build-dependencies]
+slint-build = "1.19.0"
+lucide-slint = "1.77.0"

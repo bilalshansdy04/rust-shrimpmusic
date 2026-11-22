@@ -1,0 +1,205 @@
+import { ThemePalette } from "../theme.slint";
+import { IconDisplay, IconSet } from "@lucide";
+import { Slider } from "@material";
+
+export component HearingSafetyModal inherits Rectangle {
+    in property <bool> is_visible: false;
+    in property <bool> is_testing_audio: false;
+    in-out property <float> test_volume: 0.7;
+
+    callback confirm();
+    callback toggle_test_audio();
+    callback set_test_volume(float);
+
+    if root.is_visible : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #000000B3; // Modal backdrop dim
+
+        TouchArea {
+            // Absorb clicks on backdrop to enforce modal behavior
+        }
+
+        // Dialog Card
+        Rectangle {
+            width: 480px;
+            height: 380px;
+            border-radius: 16px;
+            background: ThemePalette.bg_surface;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+
+            VerticalLayout {
+                padding: 28px;
+                spacing: 18px;
+                alignment: space-between;
+
+                // Title & Lucide Shield Icon
+                HorizontalLayout {
+                    spacing: 14px;
+                    alignment: start;
+
+                    Rectangle {
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 18px;
+                        background: ThemePalette.accent_subtle;
+                        y: (parent.height - self.height) / 2;
+
+                        IconDisplay {
+                            icon: IconSet.Shield;
+                            size: 20px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.0;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+
+                        Text {
+                            text: "Peringatan Keamanan Pendengaran";
+                            font-size: 16px;
+                            font-weight: 800;
+                            color: ThemePalette.text_primary;
+                        }
+
+                        Text {
+                            text: "Hearing Safety Handshake";
+                            font-size: 11px;
+                            font-weight: 500;
+                            color: ThemePalette.text_muted;
+                        }
+                    }
+                }
+
+                // Description
+                Text {
+                    text: "Pastikan tingkat volume pada headphone atau DAC eksternal Anda berada pada batas aman sebelum memulai pemutaran musik untuk melindungi pendengaran Anda dari lonjakan audio mendadak.";
+                    font-size: 13px;
+                    color: ThemePalette.text_secondary;
+                    wrap: word-wrap;
+                }
+
+                // 10s Audio Test Box
+                Rectangle {
+                    height: 80px;
+                    background: ThemePalette.bg_elevated;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: ThemePalette.border_subtle;
+
+                    HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        spacing: 16px;
+                        alignment: space-between;
+
+                        // Test Button
+                        Rectangle {
+                            width: 154px;
+                            height: 42px;
+                            border-radius: 21px;
+                            background: root.is_testing_audio ? #E81123 : ThemePalette.accent_primary;
+                            y: (parent.height - self.height) / 2;
+
+                            HorizontalLayout {
+                                alignment: center;
+                                spacing: 8px;
+
+                                IconDisplay {
+                                    icon: root.is_testing_audio ? IconSet.Square : IconSet.Play;
+                                    size: 14px;
+                                    stroke: #FFFFFF;
+                                    stroke-fill: #FFFFFF;
+                                    stroke-width: 2.0;
+                                    y: (parent.height - self.height) / 2;
+                                }
+
+                                Text {
+                                    text: root.is_testing_audio ? "Berhenti" : "Tes Audio (10d)";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: #FFFFFF;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            TouchArea {
+                                clicked => { root.toggle_test_audio(); }
+                            }
+                        }
+
+                        // Test Volume Slider with comfortable hit target
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 4px;
+                            width: 210px;
+
+                            HorizontalLayout {
+                                alignment: space-between;
+                                Text {
+                                    text: "Volume Master Windows (Fn+F2/F3):";
+                                    font-size: 10px;
+                                    color: ThemePalette.text_secondary;
+                                }
+                                Text {
+                                    text: Math.round(root.test_volume * 100) + "%";
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    color: ThemePalette.accent_primary;
+                                }
+                            }
+
+                            // Material 3 Volume Slider
+                            Slider {
+                                width: 100%;
+                                minimum: 0;
+                                maximum: 100;
+                                value: root.test_volume * 100.0;
+                                primary_color: ThemePalette.accent_primary;
+                                track_color: ThemePalette.bg_surface;
+                                track_height: 8px;
+
+                                value_changed(val) => {
+                                    root.test_volume = val / 100.0;
+                                    root.set_test_volume(root.test_volume);
+                                }
+                                released(val) => {
+                                    root.test_volume = val / 100.0;
+                                    root.set_test_volume(root.test_volume);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Confirmation Button
+                Rectangle {
+                    height: 46px;
+                    border-radius: 23px;
+                    background: ok_touch.has-hover ? #E64825 : ThemePalette.accent_primary;
+                    animate background { duration: 120ms; }
+
+                    Text {
+                        text: "OK, Saya Sudah Memeriksa Volume";
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: #FFFFFF;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    ok_touch := TouchArea {
+                        clicked => { root.confirm(); }
+                    }
+                }
+            }
+        }
+    }
+}

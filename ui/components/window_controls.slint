@@ -1,0 +1,122 @@
+import { ThemePalette } from "../theme.slint";
+
+export component WindowControls inherits Rectangle {
+    height: 42px;
+    background: transparent;
+
+    callback minimize();
+    callback maximize();
+    callback close();
+
+    HorizontalLayout {
+        padding-left: 18px;
+        padding-right: 12px;
+        spacing: 12px;
+
+        // App Title & Brand
+        HorizontalLayout {
+            alignment: start;
+            spacing: 8px;
+            y: (parent.height - self.height) / 2;
+            
+            // Vector Shrimp / Music Dot Logo Icon
+            Rectangle {
+                width: 14px;
+                height: 14px;
+                border-radius: 7px;
+                background: ThemePalette.accent_primary;
+                y: (parent.height - self.height) / 2;
+            }
+
+            Text {
+                text: "ShrimpMusic";
+                font-size: 13px;
+                font-weight: 800;
+                color: ThemePalette.text_primary;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: "v2.0 Native";
+                font-size: 11px;
+                font-weight: 500;
+                color: ThemePalette.text_muted;
+                vertical-alignment: center;
+            }
+        }
+
+        // Window action buttons (Windows Standard)
+        HorizontalLayout {
+            alignment: end;
+            spacing: 4px;
+            y: (parent.height - self.height) / 2;
+
+            // Minimize
+            Rectangle {
+                width: 36px;
+                height: 30px;
+                border-radius: 4px;
+                background: min_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+
+                // Horizontal line
+                Rectangle {
+                    width: 11px;
+                    height: 1.5px;
+                    background: ThemePalette.text_secondary;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2 + 3px;
+                }
+
+                min_touch := TouchArea {
+                    clicked => { root.minimize(); }
+                }
+            }
+
+            // Maximize / Restore
+            Rectangle {
+                width: 36px;
+                height: 30px;
+                border-radius: 4px;
+                background: max_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+
+                // Box outline
+                Rectangle {
+                    width: 10px;
+                    height: 10px;
+                    border-width: 1.2px;
+                    border-color: ThemePalette.text_secondary;
+                    border-radius: 1px;
+                    background: transparent;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                max_touch := TouchArea {
+                    clicked => { root.maximize(); }
+                }
+            }
+
+            // Close
+            Rectangle {
+                width: 36px;
+                height: 30px;
+                border-radius: 4px;
+                background: close_touch.has-hover ? #E81123 : transparent;
+
+                Path {
+                    width: 10px;
+                    height: 10px;
+                    stroke: close_touch.has-hover ? #FFFFFF : ThemePalette.text_secondary;
+                    stroke-width: 1.3px;
+                    commands: "M 0 0 L 10 10 M 10 0 L 0 10";
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                close_touch := TouchArea {
+                    clicked => { root.close(); }
+                }
+            }
+        }
+    }
+}

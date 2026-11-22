@@ -1,0 +1,258 @@
+import { ThemePalette } from "../theme.slint";
+import { ListView } from "std-widgets.slint";
+import { TrackItemModel } from "library.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+export component QueueView inherits Rectangle {
+    in property <[TrackItemModel]> queue_items: [];
+    in property <int> active_index: 0;
+
+    callback play_queue_item(int);
+    callback clear_queue();
+
+    background: transparent;
+
+    VerticalLayout {
+        padding-left: 20px;
+        padding-right: 24px;
+        padding-top: 14px;
+        padding-bottom: 16px;
+        spacing: 12px;
+
+        // Header
+        HorizontalLayout {
+            height: 38px;
+            alignment: space-between;
+
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+
+                IconDisplay {
+                    icon: IconSet.ListMusic;
+                    size: 16px;
+                    stroke: ThemePalette.accent_primary;
+                    stroke-width: 2.0;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                Text {
+                    text: "Antrean Pemutaran (" + root.queue_items.length + " Lagu)";
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: ThemePalette.text_primary;
+                    vertical-alignment: center;
+                }
+            }
+
+            if root.queue_items.length > 0 : Rectangle {
+                height: 28px;
+                border-radius: 14px;
+                background: clear_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
+                border-width: 1px;
+                border-color: ThemePalette.border_subtle;
+                y: (parent.height - self.height) / 2;
+
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 6px;
+
+                    IconDisplay {
+                        icon: IconSet.X;
+                        size: 12px;
+                        stroke: ThemePalette.text_secondary;
+                        stroke-width: 2.0;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    Text {
+                        text: "Kosongkan";
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: ThemePalette.text_secondary;
+                        vertical-alignment: center;
+                    }
+                }
+
+                clear_touch := TouchArea {
+                    clicked => { root.clear_queue(); }
+                }
+            }
+        }
+
+        // Empty Queue State
+        if root.queue_items.length == 0 : Rectangle {
+            background: ThemePalette.bg_surface;
+            border-radius: 14px;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 14px;
+
+                Rectangle {
+                    width: 64px;
+                    height: 64px;
+                    background: ThemePalette.accent_subtle;
+                    border-radius: 16px;
+                    x: (parent.width - self.width) / 2;
+
+                    IconDisplay {
+                        icon: IconSet.ListMusic;
+                        size: 32px;
+                        stroke: ThemePalette.accent_primary;
+                        stroke-width: 2.0;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                Text {
+                    text: "Antrean Masih Kosong";
+                    font-size: 17px;
+                    font-weight: 700;
+                    color: ThemePalette.text_primary;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "Pilih lagu atau album dari Pustaka untuk mulai mendengarkan.";
+                    font-size: 13px;
+                    color: ThemePalette.text_secondary;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // Queue Items List (Laser-straight column alignment)
+        if root.queue_items.length > 0 : ListView {
+            for track[index] in root.queue_items : Rectangle {
+                height: 50px;
+                background: index == root.active_index ? ThemePalette.bg_elevated :
+                           (item_touch.has-hover ? ThemePalette.bg_hover : transparent);
+                border-radius: 8px;
+
+                // Col 1: Play indicator or index (Fixed position x: 10px)
+                Rectangle {
+                    x: 10px;
+                    y: 0px;
+                    width: 24px;
+                    height: parent.height;
+
+                    if index == root.active_index : IconDisplay {
+                        icon: IconSet.Play;
+                        size: 13px;
+                        stroke: ThemePalette.accent_primary;
+                        stroke-fill: ThemePalette.accent_primary;
+                        stroke-width: 2.0;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    if index != root.active_index : Text {
+                        text: (index + 1) + "";
+                        font-size: 11px;
+                        font-weight: 500;
+                        color: ThemePalette.text_muted;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        width: 100%;
+                        height: 100%;
+                    }
+                }
+
+                // Col 2: Title & Artist (Strict fixed start at x: 42px, proportional width)
+                VerticalLayout {
+                    x: 42px;
+                    y: 0px;
+                    width: Math.max(130px, (parent.width - 240px) * 0.50);
+                    height: parent.height;
+                    alignment: center;
+                    spacing: 2px;
+
+                    Text {
+                        text: track.title;
+                        font-size: 13px;
+                        font-weight: index == root.active_index ? 700 : 500;
+                        color: index == root.active_index ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        text: track.artist;
+                        font-size: 11px;
+                        color: ThemePalette.text_secondary;
+                        overflow: elide;
+                    }
+                }
+
+                // Col 3: Album (Strict fixed start at same pixel on all rows)
+                VerticalLayout {
+                    x: 42px + Math.max(130px, (parent.width - 240px) * 0.50) + 14px;
+                    y: 0px;
+                    width: Math.max(80px, (parent.width - 124px) - self.x);
+                    height: parent.height;
+                    alignment: center;
+
+                    Text {
+                        text: track.album;
+                        font-size: 12px;
+                        color: ThemePalette.text_secondary;
+                        overflow: elide;
+                    }
+                }
+
+                // Col 4: Hi-Res Badge slot (Strict fixed position x: parent.width - 116px)
+                Rectangle {
+                    x: parent.width - 116px;
+                    y: (parent.height - self.height) / 2;
+                    width: 48px;
+                    height: 20px;
+
+                    if track.is_hi_res : Rectangle {
+                        width: 44px;
+                        height: 18px;
+                        border-radius: 4px;
+                        background: ThemePalette.accent_subtle;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+
+                        Text {
+                            text: "Hi-Res";
+                            font-size: 9px;
+                            font-weight: 700;
+                            color: ThemePalette.accent_primary;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Col 5: Duration (Strict fixed position x: parent.width - 62px, 14px right margin)
+                Rectangle {
+                    x: parent.width - 62px;
+                    y: 0px;
+                    width: 48px;
+                    height: parent.height;
+
+                    Text {
+                        text: track.duration_str;
+                        font-size: 11px;
+                        font-weight: 500;
+                        color: ThemePalette.text_muted;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        width: 100%;
+                        height: 100%;
+                    }
+                }
+
+                item_touch := TouchArea {
+                    double-clicked => { root.play_queue_item(index); }
+                }
+            }
+        }
+    }
+}

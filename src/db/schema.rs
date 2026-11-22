@@ -37,6 +37,7 @@ pub fn initialize_database(conn: &Connection) -> Result<()> {
             has_lyrics INTEGER NOT NULL DEFAULT 0,
             play_count INTEGER NOT NULL DEFAULT 0,
             last_played_at INTEGER,
+            waveform_data BLOB,
             is_active INTEGER NOT NULL DEFAULT 1
         );
 
@@ -74,6 +75,9 @@ pub fn initialize_database(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_playlist_tracks_order ON playlist_tracks(playlist_id, sort_order);
         "#,
     )?;
+
+    // Safe migration for waveform_data on existing DBs
+    let _ = conn.execute("ALTER TABLE tracks ADD COLUMN waveform_data BLOB", []);
 
     Ok(())
 }

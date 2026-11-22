@@ -120,6 +120,22 @@ impl PlaybackQueue {
         &self.items
     }
 
+    pub fn set_current_index(&mut self, index: usize) -> Option<&TrackRecord> {
+        if index < self.items.len() {
+            self.current_index = Some(index);
+            self.record_history(self.items[index].id);
+            Some(&self.items[index])
+        } else {
+            None
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.items.clear();
+        self.current_index = None;
+        self.history.clear();
+    }
+
     pub fn set_shuffle(&mut self, enabled: bool) {
         self.shuffle_enabled = enabled;
     }

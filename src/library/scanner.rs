@@ -145,6 +145,7 @@ impl Scanner {
                         has_lyrics: meta.lyrics.is_some(),
                         play_count: 0,
                         last_played_at: None,
+                        waveform: None,
                         is_active: true,
                     };
 

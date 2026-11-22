@@ -1,0 +1,50 @@
+import { ThemePalette } from "../theme.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+export component AlbumCard inherits Rectangle {
+    in property <image> cover_image;
+    in property <bool> has_cover: false;
+
+    border-radius: 14px;
+    background: ThemePalette.bg_surface;
+    border-width: 1px;
+    border-color: ThemePalette.border_subtle;
+    clip: true;
+
+    if root.has_cover : Image {
+        source: root.cover_image;
+        width: 100%;
+        height: 100%;
+        image-fit: cover;
+    }
+
+    if !root.has_cover : Rectangle {
+        background: @linear-gradient(135deg, ThemePalette.bg_surface 0%, ThemePalette.bg_elevated 100%);
+        width: 100%;
+        height: 100%;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 14px;
+
+            HorizontalLayout {
+                alignment: center;
+                IconDisplay {
+                    icon: IconSet.Music;
+                    size: 54px;
+                    stroke: ThemePalette.accent_primary.transparentize(20%);
+                    stroke-width: 1.8;
+                }
+            }
+
+            Text {
+                text: "ShrimpMusic";
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: 1px;
+                color: ThemePalette.text_muted;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}

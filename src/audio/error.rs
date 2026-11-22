@@ -20,6 +20,9 @@ pub enum AudioError {
     #[error("Resampling error: {0}")]
     Resample(String),
 
+    #[error("Device error: {0}")]
+    Device(String),
+
     #[error("Channel communication error")]
     ChannelClosed,
 }

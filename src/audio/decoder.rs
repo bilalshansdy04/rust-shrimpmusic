@@ -66,7 +66,11 @@ impl SymphoniaDecoder {
         let sample_rate = audio_params.sample_rate.unwrap_or(44100);
         let channels = audio_params.channels.as_ref().map(|c| c.count()).unwrap_or(2);
         let bit_depth = audio_params.bits_per_sample;
-        let codec_name = format!("{:?}", audio_params.codec);
+        let codec_name = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("AUDIO")
+            .to_uppercase();
 
         let spec = TrackAudioSpec {
             sample_rate,
@@ -129,17 +133,40 @@ impl SymphoniaDecoder {
     }
 
     pub fn seek(&mut self, target: Duration) -> AudioResult<Duration> {
-        let time = Time::from(target.as_secs() as u32);
+        let time = Time::try_new(target.as_secs() as i64, target.subsec_nanos()).unwrap_or(Time::ZERO);
         let seek_to = SeekTo::Time {
             time,
             track_id: Some(self.track_id),
         };
 
-        let res = self.format.seek(SeekMode::Accurate, seek_to)?;
-        self.decoder.reset();
-
-        let actual_time = Duration::from_secs_f64(res.actual_ts.get() as f64 / self.spec.sample_rate as f64);
-        Ok(actual_time)
+        match self.format.seek(SeekMode::Accurate, seek_to) {
+            Ok(res) => {
+                self.decoder.reset();
+                let actual_time = if let Some(track) = self.format.tracks().iter().find(|t| t.id == self.track_id) {
+                    if let Some(tb) = track.time_base {
+                        if let Some(t) = tb.calc_time(res.actual_ts) {
+                            Duration::from_secs_f64(t.as_secs_f64().max(0.0))
+                        } else {
+                            target
+                        }
+                    } else {
+                        target
+                    }
+                } else {
+                    target
+                };
+                Ok(actual_time)
+            }
+            Err(_) => {
+                let fallback_seek = SeekTo::Time {
+                    time,
+                    track_id: Some(self.track_id),
+                };
+                let _ = self.format.seek(SeekMode::Coarse, fallback_seek)?;
+                self.decoder.reset();
+                Ok(target)
+            }
+        }
     }
 }
 

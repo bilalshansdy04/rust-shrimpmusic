@@ -1,0 +1,970 @@
+import { ThemePalette } from "../theme.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+export struct FolderEntryModel {
+    id: int,
+    path: string,
+    is_enabled: bool,
+    track_count: int,
+}
+
+export struct OutputDeviceModel {
+    id: string,
+    name: string,
+    is_default: bool,
+    is_selected: bool,
+}
+
+export component SettingsDrawer inherits Rectangle {
+    in property <[FolderEntryModel]> folders: [];
+    in property <[OutputDeviceModel]> devices: [];
+    in property <bool> is_exclusive: false;
+    in property <bool> is_dark: true;
+    in property <int> shuffle_style: 0;
+
+    // EQ properties
+    in property <bool> is_eq_enabled: false;
+    in property <[float]> eq_bands: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    in property <int> volume_balance_mode: 0;
+
+    callback close_drawer();
+    callback toggle_folder(int, bool);
+    callback remove_folder(int);
+    callback rescan_folder(int);
+    callback add_folder();
+    callback toggle_exclusive(bool);
+    callback select_device(string);
+    callback toggle_dark_mode(bool);
+    callback select_shuffle_style(int);
+
+    callback toggle_eq(bool);
+    callback set_eq_band(int, float);
+    callback select_eq_preset(int);
+    callback set_volume_balance(int);
+
+    // Active Category Tab: 0: Audio & Device, 1: DSP & EQ, 2: Folders, 3: Appearance, 4: About
+    property <int> active_tab: 0;
+
+    width: 440px;
+    background: ThemePalette.bg_surface;
+
+    // Left border line
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 1px;
+        height: 100%;
+        background: ThemePalette.border_subtle;
+    }
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 14px;
+
+        // Drawer Header with Lucide Close Button
+        HorizontalLayout {
+            height: 38px;
+            alignment: space-between;
+
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: start;
+
+                Rectangle {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 14px;
+                    background: ThemePalette.accent_subtle;
+                    y: (parent.height - self.height) / 2;
+
+                    IconDisplay {
+                        icon: IconSet.Settings;
+                        size: 15px;
+                        stroke: ThemePalette.accent_primary;
+                        stroke-width: 2.0;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                Text {
+                    text: "Pengaturan";
+                    font-size: 16px;
+                    font-weight: 800;
+                    color: ThemePalette.text_primary;
+                    vertical-alignment: center;
+                }
+            }
+
+            // Close button
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: 16px;
+                background: close_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+                animate background { duration: 120ms; }
+
+                IconDisplay {
+                    icon: IconSet.X;
+                    size: 16px;
+                    stroke: ThemePalette.text_secondary;
+                    stroke-width: 2.0;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                close_touch := TouchArea {
+                    clicked => { root.close_drawer(); }
+                }
+            }
+        }
+
+        // Sub-Category Navigation Bar (Pills)
+        HorizontalLayout {
+            height: 34px;
+            spacing: 6px;
+
+            // Tab 0: Audio
+            Rectangle {
+                border-radius: 8px;
+                background: root.active_tab == 0 ? ThemePalette.accent_primary : (t0.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_base);
+                animate background { duration: 120ms; }
+                HorizontalLayout {
+                    padding-left: 10px; padding-right: 10px; alignment: center;
+                    Text {
+                        text: "Audio";
+                        font-size: 11px;
+                        font-weight: root.active_tab == 0 ? 700 : 500;
+                        color: root.active_tab == 0 ? #FFFFFF : ThemePalette.text_primary;
+                        vertical-alignment: center;
+                    }
+                }
+                t0 := TouchArea { clicked => { root.active_tab = 0; } }
+            }
+
+            // Tab 1: DSP / EQ
+            Rectangle {
+                border-radius: 8px;
+                background: root.active_tab == 1 ? ThemePalette.accent_primary : (t1.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_base);
+                animate background { duration: 120ms; }
+                HorizontalLayout {
+                    padding-left: 10px; padding-right: 10px; alignment: center;
+                    Text {
+                        text: "DSP & EQ";
+                        font-size: 11px;
+                        font-weight: root.active_tab == 1 ? 700 : 500;
+                        color: root.active_tab == 1 ? #FFFFFF : ThemePalette.text_primary;
+                        vertical-alignment: center;
+                    }
+                }
+                t1 := TouchArea { clicked => { root.active_tab = 1; } }
+            }
+
+            // Tab 2: Pustaka
+            Rectangle {
+                border-radius: 8px;
+                background: root.active_tab == 2 ? ThemePalette.accent_primary : (t2.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_base);
+                animate background { duration: 120ms; }
+                HorizontalLayout {
+                    padding-left: 10px; padding-right: 10px; alignment: center;
+                    Text {
+                        text: "Pustaka";
+                        font-size: 11px;
+                        font-weight: root.active_tab == 2 ? 700 : 500;
+                        color: root.active_tab == 2 ? #FFFFFF : ThemePalette.text_primary;
+                        vertical-alignment: center;
+                    }
+                }
+                t2 := TouchArea { clicked => { root.active_tab = 2; } }
+            }
+
+            // Tab 3: Tampilan
+            Rectangle {
+                border-radius: 8px;
+                background: root.active_tab == 3 ? ThemePalette.accent_primary : (t3.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_base);
+                animate background { duration: 120ms; }
+                HorizontalLayout {
+                    padding-left: 10px; padding-right: 10px; alignment: center;
+                    Text {
+                        text: "Tema";
+                        font-size: 11px;
+                        font-weight: root.active_tab == 3 ? 700 : 500;
+                        color: root.active_tab == 3 ? #FFFFFF : ThemePalette.text_primary;
+                        vertical-alignment: center;
+                    }
+                }
+                t3 := TouchArea { clicked => { root.active_tab = 3; } }
+            }
+
+            // Tab 4: Info
+            Rectangle {
+                border-radius: 8px;
+                background: root.active_tab == 4 ? ThemePalette.accent_primary : (t4.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_base);
+                animate background { duration: 120ms; }
+                HorizontalLayout {
+                    padding-left: 10px; padding-right: 10px; alignment: center;
+                    Text {
+                        text: "Info";
+                        font-size: 11px;
+                        font-weight: root.active_tab == 4 ? 700 : 500;
+                        color: root.active_tab == 4 ? #FFFFFF : ThemePalette.text_primary;
+                        vertical-alignment: center;
+                    }
+                }
+                t4 := TouchArea { clicked => { root.active_tab = 4; } }
+            }
+        }
+
+        // Active Tab Body Content — fills remaining vertical space
+        Flickable {
+            vertical-stretch: 1;
+
+            // ==========================================
+            // TAB 0: AUDIO & OUTPUT PERANGKAT
+            // ==========================================
+            if root.active_tab == 0 : VerticalLayout {
+                spacing: 14px;
+                alignment: start;
+
+                // WASAPI Exclusive Toggle Card
+                Rectangle {
+                    height: 62px;
+                    vertical-stretch: 0;
+                    background: ThemePalette.bg_elevated;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: root.is_exclusive ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 14px;
+                        alignment: space-between;
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+                            Text {
+                                text: "WASAPI Exclusive Mode";
+                                font-size: 13px;
+                                font-weight: 700;
+                                color: ThemePalette.text_primary;
+                            }
+                            Text {
+                                text: "Akses DAC langsung (Bit-Perfect audiophile)";
+                                font-size: 10px;
+                                color: ThemePalette.text_secondary;
+                            }
+                        }
+
+                        // Toggle Switch
+                        Rectangle {
+                            width: 44px;
+                            height: 24px;
+                            border-radius: 12px;
+                            background: root.is_exclusive ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                            y: (parent.height - self.height) / 2;
+                            animate background { duration: 150ms; }
+
+                            Rectangle {
+                                x: root.is_exclusive ? 22px : 2px;
+                                y: 2px;
+                                width: 20px;
+                                height: 20px;
+                                border-radius: 10px;
+                                background: #FFFFFF;
+                                animate x { duration: 150ms; easing: ease-out; }
+                            }
+
+                            TouchArea {
+                                clicked => { root.toggle_exclusive(!root.is_exclusive); }
+                            }
+                        }
+                    }
+                }
+
+                // Output Device Section
+                VerticalLayout {
+                    spacing: 8px;
+                    vertical-stretch: 0;
+                    alignment: start;
+
+                    Text {
+                        text: "PERANGKAT OUTPUT AUDIO (" + root.devices.length + ")";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
+                    }
+
+                    // Device list
+                    for dev in root.devices : Rectangle {
+                        height: 46px;
+                        vertical-stretch: 0;
+                        background: dev.is_selected ? ThemePalette.bg_elevated : ThemePalette.bg_base;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: dev.is_selected ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 12px;
+                            alignment: space-between;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 2px;
+                                width: 80%;
+
+                                Text {
+                                    text: dev.name;
+                                    font-size: 12px;
+                                    font-weight: dev.is_selected ? 700 : 500;
+                                    color: dev.is_selected ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                                    overflow: elide;
+                                }
+
+                                Text {
+                                    text: dev.is_default ? "Default Sistem Windows" : "WASAPI Output";
+                                    font-size: 10px;
+                                    color: ThemePalette.text_secondary;
+                                }
+                            }
+
+                            if dev.is_selected : IconDisplay {
+                                icon: IconSet.Check;
+                                size: 14px;
+                                stroke: ThemePalette.accent_primary;
+                                stroke-width: 2.2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+
+                        TouchArea {
+                            clicked => { root.select_device(dev.id); }
+                        }
+                    }
+                }
+
+                // Absorbs extra vertical space so content stays compactly at the top
+                Rectangle { vertical-stretch: 1; }
+            }
+
+            // ==========================================
+            // TAB 1: DSP, EQUALIZER & REPLAYGAIN
+            // ==========================================
+            if root.active_tab == 1 : VerticalLayout {
+                spacing: 12px;
+                alignment: start;
+
+                // Master EQ Header Card
+                Rectangle {
+                    height: 52px;
+                    vertical-stretch: 0;
+                    background: ThemePalette.bg_elevated;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: root.is_eq_enabled ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 14px;
+                        alignment: space-between;
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+                            Text {
+                                text: "10-Band Biquad Equalizer";
+                                font-size: 12px;
+                                font-weight: 700;
+                                color: ThemePalette.text_primary;
+                            }
+                            Text {
+                                text: root.is_eq_enabled ? "DSP Pemrosesan Aktif" : "Bypass Murni (Signal Pure)";
+                                font-size: 10px;
+                                color: root.is_eq_enabled ? #00E676 : ThemePalette.text_secondary;
+                            }
+                        }
+
+                        // EQ Master Switch
+                        Rectangle {
+                            width: 44px;
+                            height: 24px;
+                            border-radius: 12px;
+                            background: root.is_eq_enabled ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                            y: (parent.height - self.height) / 2;
+
+                            Rectangle {
+                                x: root.is_eq_enabled ? 22px : 2px;
+                                y: 2px;
+                                width: 20px;
+                                height: 20px;
+                                border-radius: 10px;
+                                background: #FFFFFF;
+                                animate x { duration: 150ms; }
+                            }
+
+                            TouchArea {
+                                clicked => { root.toggle_eq(!root.is_eq_enabled); }
+                            }
+                        }
+                    }
+                }
+
+                // Presets Bar (Tightly grouped)
+                VerticalLayout {
+                    spacing: 6px;
+                    vertical-stretch: 0;
+                    alignment: start;
+
+                    Text {
+                        text: "PRESET EKUALISER";
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: ThemePalette.text_muted;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Rectangle {
+                            height: 28px; border-radius: 6px; background: ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Flat"; font-size: 10px; font-weight: 600; color: ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select_eq_preset(0); } }
+                        }
+                        Rectangle {
+                            height: 28px; border-radius: 6px; background: ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Bass"; font-size: 10px; font-weight: 600; color: ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select_eq_preset(1); } }
+                        }
+                        Rectangle {
+                            height: 28px; border-radius: 6px; background: ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Vokal"; font-size: 10px; font-weight: 600; color: ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select_eq_preset(2); } }
+                        }
+                        Rectangle {
+                            height: 28px; border-radius: 6px; background: ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Akustik"; font-size: 10px; font-weight: 600; color: ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select_eq_preset(3); } }
+                        }
+                        Rectangle {
+                            height: 28px; border-radius: 6px; background: ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Treble"; font-size: 10px; font-weight: 600; color: ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select_eq_preset(4); } }
+                        }
+                    }
+                }
+
+                // 10-Band Sliders Display
+                Rectangle {
+                    height: 136px;
+                    vertical-stretch: 0;
+                    background: ThemePalette.bg_elevated;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: ThemePalette.border_subtle;
+
+                    HorizontalLayout {
+                        padding: 8px;
+                        spacing: 2px;
+                        alignment: space-between;
+
+                        for gain[index] in root.eq_bands : VerticalLayout {
+                            alignment: space-between;
+                            width: 34px;
+
+                            Text {
+                                text: Math.round(gain) + "dB";
+                                font-size: 8px;
+                                font-weight: 600;
+                                color: gain > 0.0 ? ThemePalette.accent_primary : ThemePalette.text_muted;
+                                horizontal-alignment: center;
+                            }
+
+                            // Slider track with larger touch area
+                            Rectangle {
+                                width: 24px;
+                                height: 76px;
+                                x: (parent.width - self.width) / 2;
+
+                                Rectangle {
+                                    width: 4px;
+                                    height: 100%;
+                                    border-radius: 2px;
+                                    background: ThemePalette.bg_surface;
+                                    x: (parent.width - self.width) / 2;
+
+                                    Rectangle {
+                                        y: Math.max(0px, Math.min(66px, 38px - (gain / 12.0) * 33px));
+                                        x: -4px;
+                                        width: 12px;
+                                        height: 12px;
+                                        border-radius: 6px;
+                                        background: root.is_eq_enabled ? ThemePalette.accent_primary : ThemePalette.text_muted;
+                                    }
+                                }
+
+                                TouchArea {
+                                    pointer-event(event) => {
+                                        if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                                            let ratio = 1.0 - Math.min(1.0, Math.max(0.0, self.mouse-y / self.height));
+                                            let new_gain = (ratio - 0.5) * 24.0;
+                                            root.set_eq_band(index, new_gain);
+                                        }
+                                    }
+
+                                    moved => {
+                                        if (self.pressed) {
+                                            let ratio = 1.0 - Math.min(1.0, Math.max(0.0, self.mouse-y / self.height));
+                                            let new_gain = (ratio - 0.5) * 24.0;
+                                            root.set_eq_band(index, new_gain);
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: index == 0 ? "31" : (index == 1 ? "62" : (index == 2 ? "125" : (index == 3 ? "250" : (index == 4 ? "500" : (index == 5 ? "1k" : (index == 6 ? "2k" : (index == 7 ? "4k" : (index == 8 ? "8k" : "16k"))))))));
+                                font-size: 8px;
+                                font-weight: 600;
+                                color: ThemePalette.text_secondary;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+                }
+
+                // Volume Balance (ReplayGain Normalization - tight grouping)
+                VerticalLayout {
+                    spacing: 6px;
+                    vertical-stretch: 0;
+                    alignment: start;
+
+                    Text {
+                        text: "KESEIMBANGAN VOLUME (REPLAYGAIN)";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+
+                        Rectangle {
+                            height: 32px; border-radius: 6px;
+                            background: root.volume_balance_mode == 0 ? ThemePalette.accent_primary : ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Mati"; font-size: 10px; font-weight: 600; color: root.volume_balance_mode == 0 ? #FFFFFF : ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.set_volume_balance(0); } }
+                        }
+                        Rectangle {
+                            height: 32px; border-radius: 6px;
+                            background: root.volume_balance_mode == 1 ? ThemePalette.accent_primary : ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Pelan (-18)"; font-size: 10px; font-weight: 600; color: root.volume_balance_mode == 1 ? #FFFFFF : ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.set_volume_balance(1); } }
+                        }
+                        Rectangle {
+                            height: 32px; border-radius: 6px;
+                            background: root.volume_balance_mode == 2 ? ThemePalette.accent_primary : ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Normal (-14)"; font-size: 10px; font-weight: 600; color: root.volume_balance_mode == 2 ? #FFFFFF : ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.set_volume_balance(2); } }
+                        }
+                        Rectangle {
+                            height: 32px; border-radius: 6px;
+                            background: root.volume_balance_mode == 3 ? ThemePalette.accent_primary : ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "Keras (-11)"; font-size: 10px; font-weight: 600; color: root.volume_balance_mode == 3 ? #FFFFFF : ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.set_volume_balance(3); } }
+                        }
+                    }
+                }
+
+                // Absorbs extra vertical space
+                Rectangle { vertical-stretch: 1; }
+            }
+
+            // ==========================================
+            // TAB 2: PUSTAKA & FOLDER
+            // ==========================================
+            if root.active_tab == 2 : VerticalLayout {
+                spacing: 8px;
+                alignment: start;
+
+                HorizontalLayout {
+                    alignment: space-between;
+
+                    Text {
+                        text: "FOLDER TERDAFTAR (" + root.folders.length + ")";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
+                        vertical-alignment: center;
+                    }
+
+                    // + Tambah Folder Button
+                    Rectangle {
+                        height: 28px;
+                        border-radius: 14px;
+                        background: ThemePalette.accent_primary;
+
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 12px;
+                            spacing: 6px;
+
+                            IconDisplay {
+                                icon: IconSet.FolderPlus;
+                                size: 13px;
+                                stroke: #FFFFFF;
+                                stroke-width: 2.0;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            Text {
+                                text: "Tambah Folder";
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: #FFFFFF;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        TouchArea {
+                            clicked => { root.add_folder(); }
+                        }
+                    }
+                }
+
+                // Folder list (no inner Flickable — parent handles scroll)
+                for folder in root.folders : Rectangle {
+                    height: 54px;
+                    background: ThemePalette.bg_elevated;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: ThemePalette.border_subtle;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        alignment: space-between;
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+                            width: 65%;
+
+                            Text {
+                                text: folder.path;
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: folder.is_enabled ? ThemePalette.text_primary : ThemePalette.text_muted;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: folder.track_count + " lagu • " + (folder.is_enabled ? "Aktif" : "Nonaktif");
+                                font-size: 10px;
+                                color: ThemePalette.text_secondary;
+                            }
+                        }
+
+                        // Actions: Rescan, Toggle Switch
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: end;
+
+                            // Lucide Rescan Button
+                            Rectangle {
+                                width: 30px;
+                                height: 30px;
+                                border-radius: 15px;
+                                background: rescan_touch.has-hover ? ThemePalette.bg_surface : transparent;
+                                y: (parent.height - self.height) / 2;
+
+                                IconDisplay {
+                                    icon: IconSet.RotateCw;
+                                    size: 14px;
+                                    stroke: ThemePalette.accent_primary;
+                                    stroke-width: 2.0;
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                }
+
+                                rescan_touch := TouchArea {
+                                    clicked => { root.rescan_folder(folder.id); }
+                                }
+                            }
+
+                            // Toggle Switch
+                            Rectangle {
+                                width: 36px;
+                                height: 20px;
+                                border-radius: 10px;
+                                background: folder.is_enabled ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                                y: (parent.height - self.height) / 2;
+
+                                Rectangle {
+                                    x: folder.is_enabled ? 18px : 2px;
+                                    y: 2px;
+                                    width: 16px;
+                                    height: 16px;
+                                    border-radius: 8px;
+                                    background: #FFFFFF;
+                                    animate x { duration: 150ms; }
+                                }
+
+                                TouchArea {
+                                    clicked => { root.toggle_folder(folder.id, !folder.is_enabled); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Absorbs extra vertical space
+                Rectangle { vertical-stretch: 1; }
+            }
+
+            // ==========================================
+            // TAB 3: TAMPILAN & TEMA (OLED / SOFT DAYLIGHT)
+            // ==========================================
+            if root.active_tab == 3 : VerticalLayout {
+                spacing: 14px;
+                alignment: start;
+
+                VerticalLayout {
+                    spacing: 6px;
+                    vertical-stretch: 0;
+                    alignment: start;
+
+                    Text {
+                        text: "PILIHAN TEMA APLIKASI";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
+                    }
+
+                    // Dual Theme Cards Side-by-Side
+                    HorizontalLayout {
+                        spacing: 12px;
+                        height: 110px;
+
+                        // OLED Pitch Black Card
+                        Rectangle {
+                            border-radius: 10px;
+                            background: #000000;
+                            border-width: root.is_dark ? 2px : 1px;
+                            border-color: root.is_dark ? ThemePalette.accent_primary : #333333;
+
+                            VerticalLayout {
+                                padding: 14px;
+                                alignment: space-between;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    IconDisplay {
+                                        icon: IconSet.Moon;
+                                        size: 20px;
+                                        stroke: #FF5A36;
+                                        stroke-width: 2.0;
+                                    }
+                                    if root.is_dark : IconDisplay {
+                                        icon: IconSet.Check;
+                                        size: 16px;
+                                        stroke: #00E676;
+                                        stroke-width: 2.2;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    spacing: 2px;
+                                    Text {
+                                        text: "OLED Dark";
+                                        font-size: 13px;
+                                        font-weight: 700;
+                                        color: #FFFFFF;
+                                    }
+                                    Text {
+                                        text: "Pitch black minimalis";
+                                        font-size: 10px;
+                                        color: #888888;
+                                    }
+                                }
+                            }
+
+                            TouchArea {
+                                clicked => { root.toggle_dark_mode(true); }
+                            }
+                        }
+
+                        // Soft Daylight Card
+                        Rectangle {
+                            border-radius: 10px;
+                            background: #F5F5F7;
+                            border-width: !root.is_dark ? 2px : 1px;
+                            border-color: !root.is_dark ? ThemePalette.accent_primary : #CCCCCC;
+
+                            VerticalLayout {
+                                padding: 14px;
+                                alignment: space-between;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    IconDisplay {
+                                        icon: IconSet.Sun;
+                                        size: 20px;
+                                        stroke: #E64825;
+                                        stroke-width: 2.0;
+                                    }
+                                    if !root.is_dark : IconDisplay {
+                                        icon: IconSet.Check;
+                                        size: 16px;
+                                        stroke: #00B0FF;
+                                        stroke-width: 2.2;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    spacing: 2px;
+                                    Text {
+                                        text: "Soft Daylight";
+                                        font-size: 13px;
+                                        font-weight: 700;
+                                        color: #111111;
+                                    }
+                                    Text {
+                                        text: "Terang, bersih & elegan";
+                                        font-size: 10px;
+                                        color: #666666;
+                                    }
+                                }
+                            }
+
+                            TouchArea {
+                                clicked => { root.toggle_dark_mode(false); }
+                            }
+                        }
+                    }
+                }
+
+                // Shuffle Style Picker (Tight grouping)
+                VerticalLayout {
+                    spacing: 6px;
+                    vertical-stretch: 0;
+                    alignment: start;
+
+                    Text {
+                        text: "GAYA PENGACAKAN (SHUFFLE)";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+
+                        Rectangle {
+                            height: 36px; border-radius: 6px;
+                            background: root.shuffle_style == 0 ? ThemePalette.accent_primary : ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "Anti-Ulang (Pintar)"; font-size: 11px; font-weight: 600; color: root.shuffle_style == 0 ? #FFFFFF : ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select_shuffle_style(0); } }
+                        }
+                        Rectangle {
+                            height: 36px; border-radius: 6px;
+                            background: root.shuffle_style == 1 ? ThemePalette.accent_primary : ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "Normal (Acak)"; font-size: 11px; font-weight: 600; color: root.shuffle_style == 1 ? #FFFFFF : ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select_shuffle_style(1); } }
+                        }
+                        Rectangle {
+                            height: 36px; border-radius: 6px;
+                            background: root.shuffle_style == 2 ? ThemePalette.accent_primary : ThemePalette.bg_elevated;
+                            HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "Favffle (Favorit)"; font-size: 11px; font-weight: 600; color: root.shuffle_style == 2 ? #FFFFFF : ThemePalette.text_primary; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select_shuffle_style(2); } }
+                        }
+                    }
+                }
+
+                // Absorbs extra vertical space
+                Rectangle { vertical-stretch: 1; }
+            }
+
+            // ==========================================
+            // TAB 4: SISTEM & INFO
+            // ==========================================
+            if root.active_tab == 4 : VerticalLayout {
+                spacing: 14px;
+                alignment: start;
+
+                Rectangle {
+                    height: 110px;
+                    vertical-stretch: 0;
+                    background: ThemePalette.bg_elevated;
+                    border-radius: 12px;
+                    border-width: 1px;
+                    border-color: ThemePalette.border_subtle;
+
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 6px;
+                        alignment: center;
+
+                        Text {
+                            text: "ShrimpMusic Native v2.0";
+                            font-size: 15px;
+                            font-weight: 800;
+                            color: ThemePalette.text_primary;
+                            horizontal-alignment: center;
+                        }
+
+                        Text {
+                            text: "Audiophile High-Resolution Audio Player\nArsitektur Windows Native WASAPI & Slint GUI";
+                            font-size: 11px;
+                            color: ThemePalette.text_secondary;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+                    vertical-stretch: 0;
+                    alignment: start;
+
+                    Text {
+                        text: "STATUS AUDIO ENGINE";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
+                    }
+
+                    Rectangle {
+                        height: 40px;
+                        vertical-stretch: 0;
+                        background: ThemePalette.bg_elevated;
+                        border-radius: 8px;
+
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 12px;
+                            alignment: space-between;
+
+                            Text {
+                                text: "Engine Mode";
+                                font-size: 12px;
+                                color: ThemePalette.text_primary;
+                                vertical-alignment: center;
+                            }
+
+                            Text {
+                                text: root.is_exclusive ? "WASAPI Exclusive (Direct Hardware)" : "WASAPI Shared";
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: root.is_exclusive ? #00E676 : ThemePalette.text_secondary;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+
+                // Absorbs extra vertical space
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+    }
+}

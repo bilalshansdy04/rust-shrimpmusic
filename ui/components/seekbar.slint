@@ -1,0 +1,118 @@
+import { ThemePalette } from "../theme.slint";
+
+export component Seekbar inherits Rectangle {
+    in property <int> position_ms: 0;
+    in property <int> duration_ms: 1;
+    in property <[float]> waveform_peaks: [];
+
+    callback seek_to(int);
+
+    height: 52px;
+    background: transparent;
+
+    property <bool> is_dragging: false;
+    property <float> drag_value: 0.0;
+    property <float> progress: root.duration_ms > 0 ? (root.is_dragging ? root.drag_value / (root.duration_ms * 1.0) : (root.position_ms * 1.0) / (root.duration_ms * 1.0)) : 0.0;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+
+        // Waveform Spectrum Visualizer & Interactive Scrubber
+        Rectangle {
+            height: 28px;
+            background: transparent;
+
+            // 120-Bar Waveform Peaks
+            HorizontalLayout {
+                width: 100%;
+                height: 100%;
+                spacing: 1.5px;
+                alignment: stretch;
+
+                for peak[index] in root.waveform_peaks : Rectangle {
+                    property <bool> is_played: ((index * 1.0) / Math.max(1.0, (root.waveform_peaks.length * 1.0))) <= root.progress;
+                    height: Math.max(4px, parent.height * peak);
+                    y: (parent.height - self.height) / 2;
+                    border-radius: 1px;
+                    background: is_played ? ThemePalette.accent_primary :
+                               (wave_touch.has-hover ? ThemePalette.border_subtle : ThemePalette.bg_elevated);
+                    animate background { duration: 60ms; }
+                }
+            }
+
+            // Sleek White Playhead Needle Indicator
+            Rectangle {
+                x: Math.max(0px, Math.min(parent.width - 2px, parent.width * root.progress - 1px));
+                y: 0px;
+                width: 2px;
+                height: 100%;
+                border-radius: 1px;
+                background: #FFFFFF;
+            }
+
+            // Interactive TouchArea for Click & Drag Scrubbing
+            wave_touch := TouchArea {
+                width: 100%;
+                height: 100%;
+                mouse-cursor: pointer;
+
+                pointer-event(event) => {
+                    if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                        root.is_dragging = true;
+                        let ratio = Math.min(1.0, Math.max(0.0, self.mouse-x / self.width));
+                        root.drag_value = ratio * (root.duration_ms * 1.0);
+                    }
+                    if (event.kind == PointerEventKind.up) {
+                        if (root.is_dragging) {
+                            root.is_dragging = false;
+                            root.seek_to(Math.round(root.drag_value));
+                        }
+                    }
+                }
+
+                moved => {
+                    if (self.pressed) {
+                        root.is_dragging = true;
+                        let ratio = Math.min(1.0, Math.max(0.0, self.mouse-x / self.width));
+                        root.drag_value = ratio * (root.duration_ms * 1.0);
+                    }
+                }
+
+                scroll-event(event) => {
+                    let delta = event.delta-y / 120px;
+                    let target = Math.min(root.duration_ms * 1.0, Math.max(0.0, (root.position_ms * 1.0) + delta * (root.duration_ms * 0.02)));
+                    root.seek_to(Math.round(target));
+                    accept
+                }
+            }
+        }
+
+        // Time Indicators (Elapsed & Remaining/Total)
+        HorizontalLayout {
+            alignment: space-between;
+
+            Text {
+                text: root.format_time(root.is_dragging ? Math.round(root.drag_value) : root.position_ms);
+                font-size: 11px;
+                font-weight: 600;
+                color: root.is_dragging ? ThemePalette.accent_primary : ThemePalette.text_secondary;
+            }
+
+            Text {
+                text: root.format_time(root.duration_ms);
+                font-size: 11px;
+                font-weight: 600;
+                color: ThemePalette.text_secondary;
+            }
+        }
+    }
+
+    pure function format_time(ms: int) -> string {
+        let total_sec = Math.floor(ms / 1000);
+        let minutes = Math.floor(total_sec / 60);
+        let seconds = total_sec - minutes * 60;
+        let sec_str = seconds < 10 ? "0" + seconds : "" + seconds;
+        return minutes + ":" + sec_str;
+    }
+}

@@ -319,6 +319,33 @@ impl Database {
         Ok(list)
     }
 
+    pub fn update_track_waveform(&self, track_id: i64, waveform: &[f32]) -> Result<()> {
+        let bytes: Vec<u8> = waveform.iter().flat_map(|f| f.to_le_bytes()).collect();
+        self.conn.execute(
+            "UPDATE tracks SET waveform_data = ?1 WHERE id = ?2",
+            params![bytes, track_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_track_waveform(&self, track_id: i64) -> Result<Option<Vec<f32>>> {
+        let mut stmt = self.conn.prepare("SELECT waveform_data FROM tracks WHERE id = ?1")?;
+        let mut rows = stmt.query_map(params![track_id], |row| {
+            let blob: Option<Vec<u8>> = row.get(0)?;
+            Ok(blob.map(|b| {
+                b.chunks_exact(4)
+                    .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap_or([0; 4])))
+                    .collect::<Vec<f32>>()
+            }))
+        })?;
+
+        if let Some(r) = rows.next() {
+            Ok(r?)
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn increment_play_count(&self, track_id: i64, played_at: i64) -> Result<()> {
         self.conn.execute(
             "UPDATE tracks SET play_count = play_count + 1, last_played_at = ?1 WHERE id = ?2",
@@ -427,6 +454,18 @@ impl Database {
         self.conn.execute(
             "UPDATE playlists SET custom_artwork_path = ?1, updated_at = ?2 WHERE id = ?3",
             params![artwork_path, now, playlist_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_playlist_name(&self, playlist_id: i64, new_name: &str) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        self.conn.execute(
+            "UPDATE playlists SET name = ?1, updated_at = ?2 WHERE id = ?3",
+            params![new_name, now, playlist_id],
         )?;
         Ok(())
     }
@@ -561,6 +600,7 @@ impl Database {
                 has_lyrics: row.get::<_, i64>(22)? == 1,
                 play_count: row.get::<_, i64>(23)? as u64,
                 last_played_at: row.get(24)?,
+                waveform: None,
                 is_active: row.get::<_, i64>(25)? == 1,
             };
 
@@ -626,6 +666,7 @@ impl Database {
             has_lyrics: row.get::<_, i64>(18)? == 1,
             play_count: row.get::<_, i64>(19)? as u64,
             last_played_at: row.get(20)?,
+            waveform: None,
             is_active: row.get::<_, i64>(21)? == 1,
         })
     }

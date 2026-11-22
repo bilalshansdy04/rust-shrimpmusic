@@ -27,6 +27,8 @@ Tabel pemetaan implementasi antara adendum ini dengan tahapan pengembangan di [P
 | **Section 6** | Volume Persistence & Best Practice | **Fase 2 (Settings DB)** & **Fase 3 (Theme/Shell)** | `src/db/settings.rs`, `src/audio/dsp.rs` |
 | **Section 7** | Tiga Gaya Acak (Shuffle) & Kombinasi Loop | **Fase 2 (Queue Logic)** & **Fase 4 (Transport)** | `src/audio/queue.rs`, `ui/stage.slint` |
 | **Section 8** | Hearing Safety Alert & 10s Universal Audio Test | **Fase 1/2 (Device Event & Audio Generator)** & **Fase 3 (Safety Modal)** | `src/audio/safety.rs`, `ui/dialogs/safety.slint` |
+| **Section 10** | Interaksi Desktop Lanjut (Tray, Double-Click, Deteksi Instrumental, Hotplug) | **Fase 3 (Slint UI Shell)** & **Fase 4 (Interaktivitas)** | `src/`, `ui/` |
+| **Section 11** | Interaktivitas Lanjut & DSP (EQ Presets, Waveform Cache, ReplayGain, Rescan, Scrollbar, Taskbar Controls) | **Fase 4 (Interaktivitas & DSP)** | `src/audio/dsp.rs`, `src/ui/`, Windows DWM |
 
 ---
 
@@ -273,3 +275,118 @@ Dialog konfirmasi keamanan pendengaran **wajib muncul secara modal** (mengunci i
 * `on_confirm_safety_check()` -> Pengguna menekan tombol OK konfirmasi audio aman.
 * `on_play_test_audio()` -> Memutar audio uji 10 detik pada level -18 dBFS.
 * `on_stop_test_audio()` -> Menghentikan pemutaran audio uji.
+
+---
+
+## 10. Spesifikasi Detail Interaksi Desktop & UX Tambahan
+*(Korelasi: Fase 3 Slint UI Shell & Fase 4 Interaktivitas Lanjut)*
+
+### 10.1. Perilaku Tombol Tutup [X] & System Tray (Tray Minimalist)
+* **Default Perilaku [X]:** Menekan tombol `[X]` tidak langsung mematikan aplikasi, melainkan menyembunyikan jendela utama ke *Windows System Tray* (ikon di pojok kanan bawah dekat jam Windows). Musik tetap berjalan tanpa jeda.
+* **Menu Konteks Tray (Klik Kanan Ikon Tray):**
+  * *Buka ShrimpMusic*
+  * *Putar / Jeda*
+  * *Lagu Selanjutnya*
+  * *Keluar Sepenuhnya (Quit Application)* -> Menghentikan seluruh proses audio dan menutup aplikasi bersih.
+* **Pengaturan di Settings:** Pengguna dapat mengubah perilaku tombol [X] di menu Settings (`Minimize to Tray` vs `Tutup Langsung / Exit Application`).
+
+### 10.2. Interaksi Daftar Pustaka (Single Click vs Double Click & Context Menu)
+* **Klik 1x (*Single Click*):** Menyeleksi/menyorot baris lagu (*highlighted state*).
+* **Klik 2x (*Double Click*) / Tombol `Enter`:** Langsung memutar lagu tersebut seketika (*instant playback*).
+* **Klik Kanan (*Context Menu*):** Memunculkan menu tindakan cepat:
+  1. *Putar Sekarang*
+  2. *Putar Selanjutnya (Play Next)* -> Menyisipkan lagu tepat setelah lagu aktif di antrean.
+  3. *Masukkan ke Antrean (Add to Queue)* -> Menambahkan lagu ke urutan paling belakang antrean.
+  4. *Tambahkan ke Playlist...* -> Membuka submenu daftar playlist pengguna.
+  5. *Buka Lokasi File di Windows Explorer* -> Membuka folder file lagu di Windows dengan file otomatis ter-sorot.
+
+### 10.3. Penanganan Tombol Keyboard (Strict In-App Focus & Pasif Media Keys)
+* **Strict In-App Focus Only:** Seluruh tombol pintasan keyboard (`Space` Play/Pause, `Arrow Left/Right` Seek, `Ctrl+F` Search, `Ctrl+E` Toggle Exclusive, dll.) **HANYA aktif ketika jendela aplikasi ShrimpMusic sedang aktif / fokus (*focused window*)**.
+* **Zero Input Hijacking:** Jika pengguna beralih membuka Microsoft Word, browser, game, atau aplikasi lain (posisi jendela ShrimpMusic di latar belakang / tidak fokus), seluruh input keyboard pengguna **100% dialirkan ke aplikasi aktif tersebut** dan ShrimpMusic tidak akan pernah menangkap atau merebut penekanan tombol (*no key interception*).
+* **Pasif Remote Media Keys (Headphone/Headset):** Hanya sinyal event media perangkat keras universal dari Windows (seperti tombol fisik klik play/pause di kabel earphone atau headset Bluetooth) yang dapat diterima secara pasif di latar belakang, tanpa mempengaruhi ketikan keyboard pengguna di aplikasi lain.
+
+### 10.4. Desain Layar Pustaka Kosong (*Empty State*)
+* Ditampilkan saat belum ada folder musik yang dipantau atau hasil filter kosong:
+  * Ilustrasi grafis minimalis bertema OLED pitch black / daylight.
+  * Teks: *"Pustaka Musik Anda Masih Kosong"*
+  * Subteks: *"Mulai nikmati musik berkualitas tinggi dengan menambahkan folder koleksi lagu Anda."*
+  * Tombol Aksi Utama: **`[+ Tambahkan Folder Musik Pertama Anda]`** (membuka dialog pemilih folder Windows).
+
+### 10.5. Deteksi Otomatis Instrumental vs Lagu Tanpa Lirik (Interaktif & Seru)
+Sistem memeriksa tag metadata lagu untuk menentukan mode tampilan lirik:
+1. **Terdeteksi sebagai Musik Instrumental:**
+   * Kriteria deteksi: Tag `GENRE` mengandung "Instrumental", "Classical", "Soundtrack", "OST", "Ambient", "Jazz", atau judul mengandung "(Instrumental)", "[Instrumental]", "(Off Vocal)", "[Off Vocal]", "(Karaoke)", atau tag `INSTRUMENTAL = 1`.
+   * Tampilan di *Kinetic Lyrics*: Menampilkan kartu artistik elegan dengan teks bernapas pelan:
+     > 🎻 **Lantunan Instrumen Murni**  
+     > *Nikmati keindahan harmoni instrumen tanpa vokal... Duduk santai dan resapi setiap nadanya.* ✨
+2. **Lagu Vokal Biasa tetapi Belum Memiliki Lirik:**
+   * Kriteria: Bukan instrumental, namun tidak ditemukan tag lirik tertanam maupun file `.lrc`.
+   * Tampilan di *Kinetic Lyrics*: Menampilkan pesan ramah & interaktif:
+     > 🎤 **Lirik Belum Tersedia untuk Lagu Ini**  
+     > *Nyanyi pakai nada dulu yuk! (Humming mode: ON 🎶)*  
+     > *Tip: Simpan file lirik berekstensi `.lrc` dengan nama yang sama di folder lagu untuk mengaktifkan lirik tersinkronisasi.*
+
+### 10.6. Perlindungan Audio Device Hotplug (Cabut / Pasang DAC USB)
+* **DAC USB Dicabut Saat Playback:** Sistem mendeteksi terputusnya endpoint WASAPI dan seketika melakukan **Auto-Pause (< 30ms)**. Mencegah suara berpindah mendadak ke speaker internal laptop dengan volume tidak terkontrol.
+* **DAC Dicolokkan Kembali:** Sistem memunculkan dialog modal *Hearing Safety Handshake* untuk mengonfirmasi volume aman sebelum pengguna melanjutkan pemutaran musik.
+
+---
+
+## 11. Spesifikasi Detail Interaktivitas Lanjut, DSP & Integrasi Windows
+*(Korelasi: Fase 4 Interaktivitas Lanjut, Equalizer, Waveform & SMTC)*
+
+### 11.1. 10-Band Equalizer, Sakelar Bypass & Preset Bawaan
+* **Sakelar EQ Master (ON / OFF):**
+  * Pengguna memiliki kontrol penuh untuk menyalakan atau mematikan EQ kapan saja.
+  * **Status OFF (Bypass):** Sinyal audio dialirkan murni 100% tanpa modifikasi frekuensi (*pure flat / uncolored bit-perfect sound*).
+  * **Status ON:** 10 pita frekuensi (*31Hz, 62Hz, 125Hz, 250Hz, 500Hz, 1kHz, 2kHz, 4kHz, 8kHz, 16kHz*) aktif membentuk karakter suara dengan rentang slider `-12 dB .. +12 dB`.
+* **Pop-Up Validasi & Rekomendasi Audiophile:**
+  * Saat *WASAPI Exclusive Mode* diaktifkan dan posisi EQ sedang menyala (ON), sistem menampilkan dialog rekomendasi halus:
+    > 💡 **Rekomendasi Audiophile (Bit-Perfect Mode)**  
+    > *Mode WASAPI Exclusive aktif. Untuk menghasilkan kualitas audio 100% bit-perfect murni sesuai master studio rekaman, disarankan mematikan Equalizer (Bypass).*  
+    > Opsi: **`[Matikan EQ (Rekomendasi)]`** atau **`[Tetap Gunakan EQ]`**
+* **Preset Bawaan 1-Klik:**
+  1. *Flat* (Semua pita di 0 dB)
+  2. *Bass Boost* (+4dB di 31Hz, +5dB di 62Hz, +3dB di 125Hz)
+  3. *Vocal Clear* (+3dB di 1kHz, +4dB di 2kHz, +2dB di 4kHz)
+  4. *Acoustic* (+2dB di 125Hz, +3dB di 250Hz, +2dB di 4kHz, +3dB di 8kHz)
+  5. *Treble Boost* (+3dB di 8kHz, +5dB di 16kHz)
+  6. *Custom* (Posisi pita disimpan persisten di SQLite `user_preferences`).
+
+### 11.2. Cache Titik Amplitudo Waveform (*Waveform Peaks Cache*)
+* **Perhitungan Konsisten:** Sinyal audio dibagi merata menjadi 120 jendela waktu (*time slices*). Puncak amplitudo ternormalisasi `0.0..1.0` dihitung menggunakan algoritma puncak RMS/Peak. File yang sama dijamin 100% selalu menghasilkan 120 titik gelombang yang identik.
+* **Penyimpanan Database (Anti-Lag):** 120 titik float disimpan ke tabel SQLite `tracks` (kolom `waveform_data BLOB`, hanya ~480 byte per lagu).
+* Saat lagu diputar, bentuk gelombang langsung muncul seketika (*instant zero-latency*) tanpa perlu membaca ulang file dari awal.
+
+### 11.3. Penyeimbang Volume Otomatis (*ReplayGain Normalization*)
+Menu *Settings -> Playback -> Keseimbangan Volume* menyediakan 4 opsi:
+1. **Mati (*Off* - Default):** Dinamika volume asli tanpa modifikasi.
+2. **Pelan (*Quiet / Safe Target*: -18 LUFS):** Nyaman untuk sesi mendengarkan malam hari atau headphone sensitif.
+3. **Normal (*Balanced Target*: -14 LUFS):** Standar universal industri streaming untuk menyamakan volume lagu lama dan baru.
+4. **Keras (*Punchy Target*: -11 LUFS):** Bertenaga dengan proteksi *DSP soft-clipping* agar suara tidak pecah/distorsi.
+
+### 11.4. Pemindaian Ulang Per-Folder (*Per-Folder Rescan*)
+* Di daftar folder musik (Settings), terdapat tombol aksi individu **`[🔄 Rescan Folder]`** pada tiap baris folder.
+* Mengklik tombol ini memicu pemindaian latar belakang hanya untuk folder tersebut dengan memeriksa *mtime* & *file_size* (< 1 detik selesai).
+
+### 11.5. Kustomisasi Scrollbar (Tipis, Halus & Interaktif)
+* **Desain Visual:** Lebar sangat ramping (hanya `4px` saat kursor diam), membesar secara halus menjadi `6px` saat kursor berada di atasnya (*hover*) atau saat sedang digeser (*drag*).
+* **Bentuk & Warna:** Sudut membulat penuh (`border-radius: 999px`). Menggunakan warna `ThemePalette.border_subtle` saat diam dan menyala terang ke `ThemePalette.accent_primary` saat aktif.
+* **Animasi:** Dilengkapi pelunakan geseran (*smooth damping*) untuk kenyamanan navigasi daftar pustaka yang panjang.
+
+### 11.6. Alur Kinetic Auto-Scroll Lirik & Re-sync 4 Detik
+* **Auto-Scroll Mulus:** Baris lirik yang sedang dinyanyikan otomatis diposisikan tepat di tengah layar dengan animasi transisi yang lembut.
+* **Jeda Saat Gulir Manual:** Jika pengguna menyentuh/menggulir daftar lirik secara manual untuk membaca bait lain:
+  * Pelacakan otomatis langsung dijeda sementara selama **4 detik**.
+  * Jika selama 4 detik tidak ada sentuhan/guliran manual lanjutan, layar secara otomatis meluncur kembali ke baris aktif lagu yang sedang berputar (*smooth re-sync*).
+
+### 11.7. Windows Taskbar Thumbnail Preview & Controls + Desktop Toast
+1. **Taskbar Thumbnail Toolbar Buttons (Windows DWM / ITaskbarList3):**
+   * Saat kursor mouse diarahkan (*hover*) ke ikon taskbar ShrimpMusic di Windows:
+     * Muncul jendela pratinjau mini (*thumbnail preview*) yang menampilkan sampul lagu dan judul lagu aktif.
+     * Terdapat 3 tombol kontrol interaktif di bawah pratinjau: **`[⏮ Prev]`**, **`[⏯ Play/Pause]`**, dan **`[⏭ Next]`**.
+     * Pengguna dapat mengganti lagu atau jeda langsung dari taskbar tanpa membuka jendela aplikasi.
+2. **Desktop Toast Notification:**
+   * Saat jendela ShrimpMusic diminimalkan ke *System Tray*, pergantian lagu otomatis memunculkan notifikasi ringkas Windows di pojok kanan bawah: *"Now Playing: Judul Lagu — Artis"* beserta gambar sampul album kecil (dapat dimatikan di Pengaturan).
+
+

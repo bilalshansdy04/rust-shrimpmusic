@@ -1,0 +1,193 @@
+import { ThemePalette } from "../theme.slint";
+import { UltraThinScrollbar } from "../components/custom_scrollbar.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+export struct LyricLineModel {
+    timestamp_ms: int,
+    text: string,
+    is_active: bool,
+}
+
+export component LyricsView inherits Rectangle {
+    in property <[LyricLineModel]> lines: [];
+    in property <bool> has_lyrics: false;
+    in property <bool> is_instrumental: false;
+    in property <string> track_title: "";
+    in property <string> track_artist: "";
+    in property <int> active_line_index: -1;
+    in property <bool> is_user_scrolling: false;
+    in-out property <length> scroll_offset_y: 0px;
+
+    callback line_clicked(int);
+    callback on_user_scrolled();
+    callback on_resync_clicked();
+
+    background: transparent;
+
+    property <length> total_content_height: (root.lines.length * 52px) + 360px;
+
+    // 1. Synced Lyrics View with Flickable and Smooth Kinetic Auto-Scroll
+    if root.has_lyrics && root.lines.length > 0 : Rectangle {
+        flick := Flickable {
+            x: 0px;
+            y: 0px;
+            width: parent.width - 12px;
+            height: parent.height;
+            content-height: root.total_content_height;
+            content-y: root.scroll_offset_y;
+            animate content-y { duration: 350ms; easing: ease-out; }
+
+            VerticalLayout {
+                y: 0px;
+                width: 100%;
+                spacing: 6px;
+                padding-top: 120px;
+                padding-bottom: 240px;
+
+                for line[idx] in root.lines : Rectangle {
+                    height: line.is_active ? 60px : 46px;
+                    background: transparent;
+                    animate height { duration: 250ms; easing: ease-out; }
+
+                    Rectangle {
+                        width: 90%;
+                        height: 100%;
+                        border-radius: 8px;
+                        background: line_touch.has_hover ? ThemePalette.bg_hover : transparent;
+                        animate background { duration: 150ms; }
+
+                        Text {
+                            text: line.text;
+                            font-size: line.is_active ? 22px : 15px;
+                            font-weight: line.is_active ? 800 : 500;
+                            color: line.is_active ? ThemePalette.accent_primary : 
+                                  (line_touch.has_hover ? ThemePalette.text_primary : ThemePalette.text_muted);
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            animate font-size, color { duration: 250ms; easing: ease-out; }
+                        }
+                    }
+
+                    line_touch := TouchArea {
+                        clicked => { root.line_clicked(line.timestamp_ms); }
+                    }
+                }
+            }
+        }
+
+        // Ultra-thin scrollbar on the right edge
+        UltraThinScrollbar {
+            x: parent.width - 8px;
+            y: 0px;
+            visible_height: parent.height;
+            viewport_height: root.total_content_height;
+            viewport_y: root.scroll_offset_y;
+        }
+
+        // Floating Auto-sync Resume Pill if user scrolled
+        if root.is_user_scrolling : Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: parent.height - 56px;
+            width: 220px;
+            height: 36px;
+            border-radius: 18px;
+            background: ThemePalette.accent_primary;
+            drop-shadow-blur: 12px;
+            drop-shadow-color: #00000088;
+
+            HorizontalLayout {
+                alignment: center;
+                spacing: 8px;
+
+                IconDisplay {
+                    icon: IconSet.RotateCw;
+                    size: 14px;
+                    stroke: ThemePalette.bg_surface;
+                    stroke-width: 2.2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                Text {
+                    text: "Sinkronkan Lirik (4d)";
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: ThemePalette.bg_surface;
+                    vertical-alignment: center;
+                }
+            }
+
+            sync_touch := TouchArea {
+                clicked => { root.on_resync_clicked(); }
+            }
+        }
+    }
+
+    // 2. Interactive Message: Instrumental Track
+    if !root.has_lyrics && root.is_instrumental : Rectangle {
+        background: ThemePalette.bg_surface;
+        border-radius: 14px;
+        border-width: 1px;
+        border-color: ThemePalette.border_subtle;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 16px;
+
+            Text {
+                text: "🎻";
+                font-size: 58px;
+                horizontal-alignment: center;
+            }
+
+            Text {
+                text: "Lantunan Instrumen Murni";
+                font-size: 20px;
+                font-weight: 800;
+                color: ThemePalette.accent_primary;
+                horizontal-alignment: center;
+            }
+
+            Text {
+                text: "Nikmati keindahan harmoni instrumen tanpa vokal...\nDuduk santai dan resapi setiap nadanya. ✨";
+                font-size: 14px;
+                color: ThemePalette.text_secondary;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    // 3. Interactive Message: Song without lyrics
+    if !root.has_lyrics && !root.is_instrumental : Rectangle {
+        background: ThemePalette.bg_surface;
+        border-radius: 14px;
+        border-width: 1px;
+        border-color: ThemePalette.border_subtle;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 16px;
+
+            Text {
+                text: "🎤";
+                font-size: 58px;
+                horizontal-alignment: center;
+            }
+
+            Text {
+                text: "Lirik Belum Tersedia untuk Lagu Ini";
+                font-size: 20px;
+                font-weight: 800;
+                color: ThemePalette.text_primary;
+                horizontal-alignment: center;
+            }
+
+            Text {
+                text: "Nyanyi pakai nada dulu yuk! (Humming mode: ON 🎶)\nTip: Simpan file .lrc di samping file lagu untuk mengaktifkan lirik tersinkronisasi.";
+                font-size: 13px;
+                color: ThemePalette.text_secondary;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}

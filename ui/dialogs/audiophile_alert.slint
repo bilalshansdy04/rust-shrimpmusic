@@ -1,0 +1,128 @@
+import { ThemePalette } from "../theme.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+export component AudiophileRecommendationModal inherits Rectangle {
+    in property <bool> is_visible: false;
+
+    callback bypass_eq_confirmed();
+    callback keep_eq_confirmed();
+
+    if root.is_visible : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #000000B3;
+
+        TouchArea {
+            // Modal backdrop
+        }
+
+        Rectangle {
+            width: 440px;
+            height: 270px;
+            border-radius: 16px;
+            background: ThemePalette.bg_surface;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+
+            VerticalLayout {
+                padding: 24px;
+                spacing: 16px;
+                alignment: space-between;
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+
+                    Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 16px;
+                        background: #00E67626;
+                        y: (parent.height - self.height) / 2;
+
+                        IconDisplay {
+                            icon: IconSet.Lightbulb;
+                            size: 18px;
+                            stroke: #00E676;
+                            stroke-width: 2.0;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        Text {
+                            text: "Rekomendasi Audiophile";
+                            font-size: 16px;
+                            font-weight: 800;
+                            color: ThemePalette.text_primary;
+                        }
+                        Text {
+                            text: "Kemurnian Sinyal Bit-Perfect";
+                            font-size: 11px;
+                            font-weight: 600;
+                            color: #00E676;
+                        }
+                    }
+                }
+
+                Text {
+                    text: "WASAPI Exclusive Mode baru saja diaktifkan untuk akses direct ke DAC hardware. Untuk kemurnian sinyal bit-perfect (0% distorsi digital), kami menyarankan untuk mematikan Ekualiser (Bypass EQ).";
+                    font-size: 12px;
+                    color: ThemePalette.text_secondary;
+                    wrap: word-wrap;
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+
+                    // Option 1: Bypass EQ (Recommended)
+                    Rectangle {
+                        height: 42px;
+                        border-radius: 21px;
+                        background: #00E676;
+
+                        Text {
+                            text: "Matikan EQ (Rekomendasi)";
+                            font-size: 12px;
+                            font-weight: 700;
+                            color: #000000;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        TouchArea {
+                            clicked => { root.bypass_eq_confirmed(); }
+                        }
+                    }
+
+                    // Option 2: Keep EQ
+                    Rectangle {
+                        height: 42px;
+                        border-radius: 21px;
+                        background: ThemePalette.bg_elevated;
+                        border-width: 1px;
+                        border-color: ThemePalette.border_subtle;
+
+                        Text {
+                            text: "Tetap Pakai EQ";
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: ThemePalette.text_secondary;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        TouchArea {
+                            clicked => { root.keep_eq_confirmed(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

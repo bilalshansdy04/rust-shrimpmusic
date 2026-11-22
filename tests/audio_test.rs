@@ -61,3 +61,23 @@ fn test_device_enumeration() {
     let default_count = devices.iter().filter(|d| d.is_default).count();
     assert_eq!(default_count, 1, "Should have exactly one default output device");
 }
+
+#[test]
+fn test_decoder_seek() {
+    let flac_path = std::path::Path::new(r"D:\Lossless Music\01 - Love Me Back.flac");
+    if flac_path.exists() {
+        let mut dec = shrimp_music::audio::decoder::SymphoniaDecoder::open(flac_path).expect("Failed to open FLAC");
+        let seek_res = dec.seek(std::time::Duration::from_secs(15));
+        println!("Seek result: {:?}", seek_res);
+        assert!(seek_res.is_ok(), "Seek should succeed: {:?}", seek_res);
+    }
+}
+
+#[test]
+fn test_windows_master_volume() {
+    let ctrl = shrimp_music::audio::WindowsVolumeController::new();
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    let vol = ctrl.get_volume();
+    println!("Windows master volume from controller: {}", vol);
+    assert!(vol >= 0.0 && vol <= 1.0);
+}

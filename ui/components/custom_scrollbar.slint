@@ -1,0 +1,47 @@
+import { ThemePalette } from "../theme.slint";
+
+export component UltraThinScrollbar inherits Rectangle {
+    in property <length> viewport_height: 1000px;
+    in property <length> visible_height: 500px;
+    in-out property <length> viewport_y: 0px;
+
+    width: 6px;
+    background: transparent;
+
+    property <bool> is_overflowing: root.viewport_height > root.visible_height;
+    property <length> track_height: root.visible_height;
+    property <length> thumb_height: root.is_overflowing ? 
+        max(30px, (root.visible_height / root.viewport_height) * root.visible_height) : 0px;
+
+    property <length> max_scroll: root.viewport_height - root.visible_height;
+    property <length> thumb_y: (root.is_overflowing && root.max_scroll > 0px) ? 
+        (-root.viewport_y / root.max_scroll) * (root.track_height - root.thumb_height) : 0px;
+
+    // Track visual on hover
+    Rectangle {
+        x: 1px;
+        width: parent.width - 2px;
+        height: 100%;
+        border-radius: 3px;
+        background: touch.has_hover ? ThemePalette.border_subtle : transparent;
+        animate background { duration: 150ms; }
+    }
+
+    // Scroll Thumb
+    thumb := Rectangle {
+        x: touch.has_hover ? 0px : 1px;
+        y: min(root.track_height - root.thumb_height, max(0px, root.thumb_y));
+        width: touch.has_hover ? root.width : (root.width - 2px);
+        height: root.thumb_height;
+        border-radius: 3px;
+        background: touch.pressed ? ThemePalette.accent_primary : 
+                    (touch.has_hover ? ThemePalette.text_secondary : ThemePalette.border_subtle);
+        opacity: root.is_overflowing ? 0.7 : 0.0;
+        animate width, opacity, background { duration: 150ms; easing: ease-out; }
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+    }
+}

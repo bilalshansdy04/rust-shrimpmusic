@@ -1,6 +1,6 @@
 use shrimp_music::audio::{LoopMode, PlaybackQueue, SafetyTestSignal, ShuffleStyle};
 use shrimp_music::db::{open_memory_database, SortCriteria, TrackRecord};
-use shrimp_music::library::artwork::{clear_thumbnail_cache, generate_and_save_thumbnail};
+use shrimp_music::library::artwork::generate_and_save_thumbnail;
 use shrimp_music::library::metadata::{check_is_synced, parse_lrc_lines};
 use shrimp_music::library::playlist::PlaylistManager;
 use shrimp_music::library::search::SearchEngine;
@@ -34,6 +34,7 @@ fn test_database_and_scoped_library() {
         has_lyrics: false,
         play_count: 5,
         last_played_at: None,
+        waveform: None,
         is_active: true,
     };
 
@@ -59,6 +60,7 @@ fn test_database_and_scoped_library() {
         has_lyrics: true,
         play_count: 10,
         last_played_at: None,
+        waveform: None,
         is_active: true,
     };
 
@@ -84,6 +86,7 @@ fn test_database_and_scoped_library() {
         has_lyrics: false,
         play_count: 2,
         last_played_at: None,
+        waveform: None,
         is_active: true,
     };
 
@@ -177,6 +180,7 @@ fn test_lyrics_parsing_and_search() {
         has_lyrics: true,
         play_count: 0,
         last_played_at: None,
+        waveform: None,
         is_active: true,
     };
     let tid = db.upsert_track(&tr).unwrap();
@@ -227,6 +231,7 @@ fn test_playlist_and_m3u8_import_export() {
         has_lyrics: false,
         play_count: 0,
         last_played_at: None,
+        waveform: None,
         is_active: true,
     };
     let tid1 = db.upsert_track(&tr1).unwrap();
@@ -253,6 +258,7 @@ fn test_playlist_and_m3u8_import_export() {
         has_lyrics: false,
         play_count: 0,
         last_played_at: None,
+        waveform: None,
         is_active: true,
     };
     let tid2 = db.upsert_track(&tr2).unwrap();
@@ -283,6 +289,11 @@ fn test_playlist_and_m3u8_import_export() {
     let imported_tracks = PlaylistManager::get_playlist_tracks(&db, imported_pid).unwrap();
     assert_eq!(imported_tracks.len(), 2);
     assert_eq!(imported_tracks[0].track.title, "Song One");
+
+    // Rename playlist test
+    PlaylistManager::update_playlist_name(&db, pid, "Relaxing Evening").unwrap();
+    let updated_pl = db.get_playlist(pid).unwrap().unwrap();
+    assert_eq!(updated_pl.name, "Relaxing Evening");
 
     let _ = std::fs::remove_file(temp_m3u8);
 }
@@ -315,6 +326,7 @@ fn test_queue_shuffle_and_safety_tone() {
             has_lyrics: false,
             play_count: (i * 10) as u64, // higher id has higher play_count for Favffle
             last_played_at: None,
+            waveform: None,
             is_active: true,
         });
     }
@@ -384,5 +396,5 @@ fn test_artwork_downscaling() {
     assert_eq!(loaded.width(), 250);
     assert_eq!(loaded.height(), 250);
 
-    let _ = clear_thumbnail_cache();
+    let _ = std::fs::remove_file(thumb_file);
 }

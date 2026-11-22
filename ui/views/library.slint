@@ -1,0 +1,379 @@
+import { ThemePalette } from "../theme.slint";
+import { ListView } from "std-widgets.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+export struct TrackItemModel {
+    id: int,
+    title: string,
+    artist: string,
+    album: string,
+    duration_str: string,
+    format: string,
+    is_hi_res: bool,
+    is_active: bool,
+}
+
+export struct FolderScopeModel {
+    id: int,
+    display_name: string,
+    is_selected: bool,
+}
+
+export component LibraryView inherits Rectangle {
+    in property <[TrackItemModel]> tracks: [];
+    in property <[FolderScopeModel]> folder_scopes: [];
+    in property <int> selected_track_id: -1;
+    in property <int> active_playing_id: -1;
+    in property <int> total_folders: 0;
+    in property <bool> is_scanning: false;
+    in property <string> scan_status_text: "Memindai folder musik...";
+
+    callback track_selected(int);
+    callback track_double_clicked(int);
+    callback scope_changed(int);
+    callback sort_changed(int);
+    callback add_folder_clicked();
+
+    background: transparent;
+
+    VerticalLayout {
+        padding-left: 20px;
+        padding-right: 24px;
+        padding-top: 14px;
+        padding-bottom: 16px;
+        spacing: 12px;
+
+        // Scanning Status Banner
+        if root.is_scanning : Rectangle {
+            height: 48px;
+            background: ThemePalette.bg_elevated;
+            border-radius: 10px;
+            border-width: 1px;
+            border-color: ThemePalette.accent_primary;
+
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 12px;
+                alignment: start;
+
+                IconDisplay {
+                    icon: IconSet.Zap;
+                    size: 18px;
+                    stroke: ThemePalette.accent_primary;
+                    stroke-width: 2.0;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 2px;
+
+                    Text {
+                        text: "Sedang Memindai Koleksi Musik...";
+                        font-size: 12px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
+                    }
+
+                    Text {
+                        text: root.scan_status_text;
+                        font-size: 11px;
+                        color: ThemePalette.text_secondary;
+                        overflow: elide;
+                    }
+                }
+            }
+        }
+
+        // Top Filter & Actions Bar
+        HorizontalLayout {
+            height: 38px;
+            spacing: 12px;
+            alignment: space-between;
+
+            // Scope Pills (Horizontal flex)
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                horizontal-stretch: 1;
+
+                for scope in root.folder_scopes : Rectangle {
+                    height: 30px;
+                    border-radius: 15px;
+                    background: scope.is_selected ? ThemePalette.accent_primary : (s_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface);
+                    border-width: 1px;
+                    border-color: ThemePalette.border_subtle;
+                    y: (parent.height - self.height) / 2;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        alignment: center;
+
+                        Text {
+                            text: scope.display_name;
+                            font-size: 11px;
+                            font-weight: scope.is_selected ? 700 : 500;
+                            color: scope.is_selected ? #FFFFFF : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    s_touch := TouchArea {
+                        clicked => { root.scope_changed(scope.id); }
+                    }
+                }
+            }
+
+            // Add Folder Quick Button (Fixed width, never squished)
+            Rectangle {
+                width: 128px;
+                height: 30px;
+                border-radius: 15px;
+                background: add_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
+                border-width: 1px;
+                border-color: ThemePalette.border_subtle;
+                y: (parent.height - self.height) / 2;
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 12px;
+                    spacing: 8px;
+                    alignment: center;
+
+                    IconDisplay {
+                        icon: IconSet.FolderPlus;
+                        size: 14px;
+                        stroke: ThemePalette.accent_primary;
+                        stroke-width: 2.0;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    Text {
+                        text: "Tambah Folder";
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: ThemePalette.text_primary;
+                        vertical-alignment: center;
+                    }
+                }
+
+                add_touch := TouchArea {
+                    clicked => { root.add_folder_clicked(); }
+                }
+            }
+        }
+
+        // Empty State (If no tracks/folders)
+        if root.tracks.length == 0 : Rectangle {
+            background: ThemePalette.bg_surface;
+            border-radius: 14px;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 16px;
+
+                Rectangle {
+                    width: 72px;
+                    height: 64px;
+                    background: ThemePalette.accent_subtle;
+                    border-radius: 16px;
+                    x: (parent.width - self.width) / 2;
+
+                    IconDisplay {
+                        icon: root.is_scanning ? IconSet.RotateCw : IconSet.Folder;
+                        size: 32px;
+                        stroke: ThemePalette.accent_primary;
+                        stroke-width: 2.0;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                Text {
+                    text: root.is_scanning ? "Sedang Memindai Pustaka..." : "Pustaka Musik Anda Masih Kosong";
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: ThemePalette.text_primary;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: root.is_scanning ? root.scan_status_text : "Mulai nikmati musik berkualitas tinggi dengan menambahkan folder koleksi lagu Anda.";
+                    font-size: 13px;
+                    color: ThemePalette.text_secondary;
+                    horizontal-alignment: center;
+                }
+
+                HorizontalLayout {
+                    alignment: center;
+
+                    Rectangle {
+                        width: 180px;
+                        height: 42px;
+                        border-radius: 21px;
+                        background: ThemePalette.accent_primary;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 8px;
+
+                            IconDisplay {
+                                icon: IconSet.FolderPlus;
+                                size: 16px;
+                                stroke: #FFFFFF;
+                                stroke-width: 2.0;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            Text {
+                                text: "Tambah Folder Musik";
+                                font-size: 12px;
+                                font-weight: 700;
+                                color: #FFFFFF;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        TouchArea {
+                            clicked => { root.add_folder_clicked(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Track List View (Laser-straight column alignment)
+        if root.tracks.length > 0 : ListView {
+            for track[index] in root.tracks : Rectangle {
+                height: 52px;
+                background: track.id == root.selected_track_id ? ThemePalette.bg_elevated :
+                           (row_touch.has-hover ? ThemePalette.bg_hover : transparent);
+                border-radius: 8px;
+
+                // Col 1: Play status or index (Fixed position x: 10px)
+                Rectangle {
+                    x: 10px;
+                    y: 0px;
+                    width: 24px;
+                    height: parent.height;
+
+                    if track.id == root.active_playing_id : IconDisplay {
+                        icon: IconSet.Play;
+                        size: 14px;
+                        stroke: ThemePalette.accent_primary;
+                        stroke-fill: ThemePalette.accent_primary;
+                        stroke-width: 2.0;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    if track.id != root.active_playing_id : Text {
+                        text: (index + 1) + "";
+                        font-size: 11px;
+                        font-weight: 500;
+                        color: ThemePalette.text_muted;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        width: 100%;
+                        height: 100%;
+                    }
+                }
+
+                // Col 2: Title & Artist (Strict fixed start at x: 42px, proportional width)
+                VerticalLayout {
+                    x: 42px;
+                    y: 0px;
+                    width: Math.max(130px, (parent.width - 240px) * 0.50);
+                    height: parent.height;
+                    alignment: center;
+                    spacing: 2px;
+
+                    Text {
+                        text: track.title;
+                        font-size: 13px;
+                        font-weight: track.id == root.active_playing_id ? 700 : 500;
+                        color: track.id == root.active_playing_id ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        text: track.artist;
+                        font-size: 11px;
+                        color: ThemePalette.text_secondary;
+                        overflow: elide;
+                    }
+                }
+
+                // Col 3: Album (Strict fixed start at same pixel on all rows)
+                VerticalLayout {
+                    x: 42px + Math.max(130px, (parent.width - 240px) * 0.50) + 14px;
+                    y: 0px;
+                    width: Math.max(80px, (parent.width - 124px) - self.x);
+                    height: parent.height;
+                    alignment: center;
+
+                    Text {
+                        text: track.album;
+                        font-size: 12px;
+                        color: ThemePalette.text_secondary;
+                        overflow: elide;
+                    }
+                }
+
+                // Col 4: Hi-Res Badge slot (Strict fixed position x: parent.width - 116px)
+                Rectangle {
+                    x: parent.width - 116px;
+                    y: (parent.height - self.height) / 2;
+                    width: 48px;
+                    height: 20px;
+
+                    if track.is_hi_res : Rectangle {
+                        width: 44px;
+                        height: 18px;
+                        border-radius: 4px;
+                        background: ThemePalette.accent_subtle;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+
+                        Text {
+                            text: "Hi-Res";
+                            font-size: 9px;
+                            font-weight: 700;
+                            color: ThemePalette.accent_primary;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Col 5: Duration (Strict fixed position x: parent.width - 62px, 14px right margin)
+                Rectangle {
+                    x: parent.width - 62px;
+                    y: 0px;
+                    width: 48px;
+                    height: parent.height;
+
+                    Text {
+                        text: track.duration_str;
+                        font-size: 11px;
+                        font-weight: 500;
+                        color: ThemePalette.text_muted;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        width: 100%;
+                        height: 100%;
+                    }
+                }
+
+                row_touch := TouchArea {
+                    clicked => { root.track_selected(track.id); }
+                    double-clicked => { root.track_double_clicked(track.id); }
+                }
+            }
+        }
+    }
+}

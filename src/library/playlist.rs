@@ -21,6 +21,10 @@ impl PlaylistManager {
         db.delete_playlist(playlist_id)
     }
 
+    pub fn update_playlist_name(db: &Database, playlist_id: i64, new_name: &str) -> rusqlite::Result<()> {
+        db.update_playlist_name(playlist_id, new_name)
+    }
+
     pub fn get_playlists(db: &Database) -> rusqlite::Result<Vec<Playlist>> {
         db.get_playlists()
     }

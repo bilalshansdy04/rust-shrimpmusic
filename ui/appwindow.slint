@@ -1,0 +1,446 @@
+import { ThemePalette } from "theme.slint";
+import { IconDisplay, IconSet } from "@lucide";
+import { PillDock } from "components/pill_dock.slint";
+import { AcousticStage } from "views/stage.slint";
+import { LibraryView, TrackItemModel, FolderScopeModel } from "views/library.slint";
+import { PlaylistView, PlaylistItemModel } from "views/playlist.slint";
+import { LyricsView, LyricLineModel } from "views/lyrics.slint";
+import { QueueView } from "views/queue.slint";
+import { SettingsDrawer, FolderEntryModel, OutputDeviceModel } from "views/settings.slint";
+import { HearingSafetyModal } from "dialogs/safety.slint";
+import { AudiophileRecommendationModal } from "dialogs/audiophile_alert.slint";
+
+export { ThemePalette, TrackItemModel, FolderScopeModel, LyricLineModel, FolderEntryModel, OutputDeviceModel, PlaylistItemModel }
+
+export component AppWindow inherits Window {
+    title: "ShrimpMusic Native v2.0";
+    no-frame: true;
+    background: ThemePalette.bg_base;
+    preferred-width: 1140px;
+    preferred-height: 740px;
+    min-width: 960px;
+    min-height: 620px;
+
+    // --- AppState Properties from Rust ---
+    in property <bool> is_playing: false;
+    in property <string> track_title: "Belum Memutar Lagu";
+    in property <string> track_artist: "Pilih lagu dari pustaka";
+    in property <string> track_album: "";
+    in property <string> audio_format: "FLAC";
+    in property <int> bit_depth: 24;
+    in property <int> sample_rate: 96000;
+    in property <bool> is_exclusive: false;
+    in property <image> cover_image;
+    in property <bool> has_cover: false;
+
+    in property <int> position_ms: 0;
+    in property <int> duration_ms: 1;
+    in property <[float]> waveform_peaks: [];
+    in-out property <float> volume: 0.7;
+    in property <bool> is_shuffle: false;
+    in property <int> shuffle_style: 0;
+    in property <int> loop_mode: 0;
+
+    // EQ & DSP
+    in property <bool> is_eq_enabled: false;
+    in property <[float]> eq_bands: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    in property <int> volume_balance_mode: 0;
+
+    in property <[TrackItemModel]> library_tracks: [];
+    in property <[FolderScopeModel]> folder_scopes: [];
+    in property <int> selected_track_id: -1;
+    in property <int> active_playing_id: -1;
+
+    in property <[LyricLineModel]> lyrics_lines: [];
+    in property <bool> has_lyrics: false;
+    in property <bool> is_instrumental: false;
+    in property <int> active_lyric_index: -1;
+    in property <bool> is_user_scrolling_lyrics: false;
+    in-out property <length> lyrics_scroll_offset_y: 0px;
+
+    in property <[TrackItemModel]> queue_items: [];
+    in property <int> active_queue_index: 0;
+
+    in property <[PlaylistItemModel]> playlists: [];
+    in property <[TrackItemModel]> playlist_tracks: [];
+    in-out property <int> selected_playlist_id: -1;
+    in-out property <string> selected_playlist_name: "";
+
+    in property <[FolderEntryModel]> settings_folders: [];
+    in property <[OutputDeviceModel]> settings_devices: [];
+
+    in property <bool> is_safety_modal_visible: false;
+    in property <bool> is_testing_audio: false;
+    in-out property <float> windows_master_volume: 0.12;
+    in property <bool> is_audiophile_modal_visible: false;
+    in property <bool> is_scanning: false;
+    in property <string> scan_status_text: "Memindai folder musik...";
+
+    // --- Internal UI States ---
+    in-out property <int> active_view: 0; // 0: Library, 1: Playlist, 2: Lyrics, 3: Queue
+    property <bool> is_settings_open: false;
+
+    // --- Callbacks to Rust ---
+    callback on_play_pause();
+    callback on_previous();
+    callback on_next();
+    callback on_toggle_shuffle();
+    callback on_cycle_loop_mode();
+    callback on_set_volume(float);
+    callback on_seek_to(int);
+
+    callback on_track_selected(int);
+    callback on_track_double_clicked(int);
+    callback on_scope_changed(int);
+    callback on_search_changed(string);
+    callback on_add_folder_clicked();
+
+    callback on_play_queue_item(int);
+    callback on_clear_queue();
+
+    callback on_create_playlist(string);
+    callback on_rename_playlist(int, string);
+    callback on_delete_playlist(int);
+    callback on_play_playlist(int);
+    callback on_export_playlist(int);
+    callback on_import_playlist();
+    callback on_select_playlist(int);
+    callback on_remove_track_from_playlist(int, int);
+
+    callback on_toggle_folder(int, bool);
+    callback on_remove_folder(int);
+    callback on_rescan_folder(int);
+    callback on_toggle_exclusive(bool);
+    callback on_select_device(string);
+    callback on_toggle_dark_mode(bool);
+    callback on_select_shuffle_style(int);
+
+    callback on_toggle_eq(bool);
+    callback on_set_eq_band(int, float);
+    callback on_select_eq_preset(int);
+    callback on_set_volume_balance(int);
+    callback on_lyrics_user_scrolled();
+    callback on_lyrics_resync_clicked();
+
+    callback on_confirm_safety_modal();
+    callback on_toggle_test_audio();
+    callback on_set_test_volume(float);
+
+    callback on_confirm_bypass_eq();
+    callback on_confirm_keep_eq();
+
+    callback on_window_minimize();
+    callback on_window_maximize();
+    callback on_window_close();
+    callback on_window_drag();
+
+    // Root layout
+    VerticalLayout {
+        // Unified Top Navigation Bar (Brand + Centered PillDock + Window Controls)
+        WindowMoveArea {
+            height: 52px;
+
+            Rectangle {
+                width: 100%;
+                height: 100%;
+                background: ThemePalette.bg_surface;
+
+                // Bottom border line
+                Rectangle {
+                    x: 0;
+                    y: parent.height - 1px;
+                    width: 100%;
+                    height: 1px;
+                    background: ThemePalette.border_subtle;
+                }
+
+                HorizontalLayout {
+                    padding-left: 18px;
+                    padding-right: 12px;
+                    alignment: space-between;
+
+                    // Left: App Brand & Logo
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 10px;
+
+                        Rectangle {
+                            width: 14px;
+                            height: 14px;
+                            border-radius: 7px;
+                            background: ThemePalette.accent_primary;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        Text {
+                            text: "ShrimpMusic";
+                            font-size: 14px;
+                            font-weight: 800;
+                            color: ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        Text {
+                            text: "v2.0";
+                            font-size: 11px;
+                            font-weight: 600;
+                            color: ThemePalette.text_muted;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    // Center: Navigation Pill Dock
+                    HorizontalLayout {
+                        alignment: center;
+
+                        PillDock {
+                            active_tab: root.active_view;
+                            tab_selected(tab) => { root.active_view = tab; }
+                            search_changed(q) => { root.on_search_changed(q); }
+                            open_settings => { root.is_settings_open = !root.is_settings_open; }
+                        }
+                    }
+
+                    // Right: Native Window Action Controls
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 4px;
+
+                        // Minimize
+                        Rectangle {
+                            width: 36px;
+                            height: 30px;
+                            border-radius: 4px;
+                            background: min_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+
+                            IconDisplay {
+                                icon: IconSet.Minus;
+                                size: 14px;
+                                stroke: ThemePalette.text_secondary;
+                                stroke-width: 2.0;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            min_touch := TouchArea {
+                                clicked => { root.on_window_minimize(); }
+                            }
+                        }
+
+                        // Maximize
+                        Rectangle {
+                            width: 36px;
+                            height: 30px;
+                            border-radius: 4px;
+                            background: max_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+
+                            IconDisplay {
+                                icon: IconSet.Square;
+                                size: 12px;
+                                stroke: ThemePalette.text_secondary;
+                                stroke-width: 1.8;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            max_touch := TouchArea {
+                                clicked => { root.on_window_maximize(); }
+                            }
+                        }
+
+                        // Close
+                        Rectangle {
+                            width: 36px;
+                            height: 30px;
+                            border-radius: 4px;
+                            background: close_touch.has-hover ? #E81123 : transparent;
+
+                            IconDisplay {
+                                icon: IconSet.X;
+                                size: 14px;
+                                stroke: close_touch.has-hover ? #FFFFFF : ThemePalette.text_secondary;
+                                stroke-width: 2.0;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            close_touch := TouchArea {
+                                clicked => { root.on_window_close(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Main Stage & Canvas Body
+        Rectangle {
+            HorizontalLayout {
+                // Sisi Kiri: The Acoustic Stage (Lebar Adaptif)
+                AcousticStage {
+                    min-width: 340px;
+                    preferred-width: 380px;
+                    max-width: 440px;
+                    horizontal-stretch: 0;
+                    cover_image: root.cover_image;
+                    has_cover: root.has_cover;
+                    track_title: root.track_title;
+                    track_artist: root.track_artist;
+                    track_album: root.track_album;
+                    audio_format: root.audio_format;
+                    bit_depth: root.bit_depth;
+                    sample_rate: root.sample_rate;
+                    is_exclusive: root.is_exclusive;
+
+                    is_playing: root.is_playing;
+                    is_shuffle: root.is_shuffle;
+                    shuffle_style: root.shuffle_style;
+                    loop_mode: root.loop_mode;
+                    volume <=> root.volume;
+                    position_ms: root.position_ms;
+                    duration_ms: root.duration_ms;
+                    waveform_peaks: root.waveform_peaks;
+
+                    toggle_play => { root.on_play_pause(); }
+                    previous => { root.on_previous(); }
+                    next => { root.on_next(); }
+                    toggle_shuffle => { root.on_toggle_shuffle(); }
+                    cycle_loop => { root.on_cycle_loop_mode(); }
+                    set_volume(v) => { root.on_set_volume(v); }
+                    seek_to(ms) => { root.on_seek_to(ms); }
+                }
+
+                // Sisi Kanan: Dynamic Canvas (Lebar Fleksibel)
+                Rectangle {
+                    horizontal-stretch: 1;
+                    min-width: 520px;
+                    background: ThemePalette.bg_base;
+
+                    // View 0: Library View
+                    if root.active_view == 0 : LibraryView {
+                        tracks: root.library_tracks;
+                        folder_scopes: root.folder_scopes;
+                        selected_track_id: root.selected_track_id;
+                        active_playing_id: root.active_playing_id;
+                        total_folders: root.settings_folders.length;
+                        is_scanning: root.is_scanning;
+                        scan_status_text: root.scan_status_text;
+
+                        track_selected(id) => { root.on_track_selected(id); }
+                        track_double_clicked(id) => { root.on_track_double_clicked(id); }
+                        scope_changed(id) => { root.on_scope_changed(id); }
+                        add_folder_clicked => { root.on_add_folder_clicked(); }
+                    }
+
+                    // View 1: Playlist View
+                    if root.active_view == 1 : PlaylistView {
+                        playlists: root.playlists;
+                        playlist_tracks: root.playlist_tracks;
+                        active_playing_id: root.active_playing_id;
+                        selected_playlist_id <=> root.selected_playlist_id;
+                        selected_playlist_name <=> root.selected_playlist_name;
+
+                        create_playlist(name) => { root.on_create_playlist(name); }
+                        rename_playlist(id, name) => { root.on_rename_playlist(id, name); }
+                        delete_playlist(id) => { root.on_delete_playlist(id); }
+                        play_playlist(id) => { root.on_play_playlist(id); }
+                        export_playlist(id) => { root.on_export_playlist(id); }
+                        import_playlist => { root.on_import_playlist(); }
+                        select_playlist(id) => { root.on_select_playlist(id); }
+                        back_to_playlists => { root.selected_playlist_id = -1; }
+                        track_double_clicked(id) => { root.on_track_double_clicked(id); }
+                        remove_track_from_playlist(p_id, t_id) => { root.on_remove_track_from_playlist(p_id, t_id); }
+                    }
+
+                    // View 2: Kinetic Lyrics View
+                    if root.active_view == 2 : LyricsView {
+                        lines: root.lyrics_lines;
+                        has_lyrics: root.has_lyrics;
+                        is_instrumental: root.is_instrumental;
+                        track_title: root.track_title;
+                        track_artist: root.track_artist;
+                        active_line_index: root.active_lyric_index;
+                        is_user_scrolling: root.is_user_scrolling_lyrics;
+                        scroll_offset_y <=> root.lyrics_scroll_offset_y;
+
+                        line_clicked(ms) => { root.on_seek_to(ms); }
+                        on_user_scrolled => { root.on_lyrics_user_scrolled(); }
+                        on_resync_clicked => { root.on_lyrics_resync_clicked(); }
+                    }
+
+                    // View 3: Queue & Up Next View
+                    if root.active_view == 3 : QueueView {
+                        queue_items: root.queue_items;
+                        active_index: root.active_queue_index;
+
+                        play_queue_item(idx) => { root.on_play_queue_item(idx); }
+                        clear_queue => { root.on_clear_queue(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // Slide-Over Drawer: Settings (Right side overlay)
+    if root.is_settings_open : Rectangle {
+        x: 0;
+        y: 0;
+        width: 100%;
+        height: 100%;
+        background: #00000066;
+
+        TouchArea {
+            clicked => { root.is_settings_open = false; }
+        }
+
+        SettingsDrawer {
+            x: parent.width - self.width;
+            y: 0;
+            height: 100%;
+            folders: root.settings_folders;
+            devices: root.settings_devices;
+            is_exclusive: root.is_exclusive;
+            is_dark: ThemePalette.is_dark;
+            shuffle_style: root.shuffle_style;
+            is_eq_enabled: root.is_eq_enabled;
+            eq_bands: root.eq_bands;
+            volume_balance_mode: root.volume_balance_mode;
+
+            close_drawer => { root.is_settings_open = false; }
+            toggle_folder(id, en) => { root.on_toggle_folder(id, en); }
+            remove_folder(id) => { root.on_remove_folder(id); }
+            rescan_folder(id) => { root.on_rescan_folder(id); }
+            add_folder => { root.on_add_folder_clicked(); }
+            toggle_exclusive(en) => { root.on_toggle_exclusive(en); }
+            select_device(id) => { root.on_select_device(id); }
+            toggle_dark_mode(dark) => {
+                ThemePalette.is_dark = dark;
+                root.on_toggle_dark_mode(dark);
+            }
+            select_shuffle_style(s) => { root.on_select_shuffle_style(s); }
+            toggle_eq(en) => { root.on_toggle_eq(en); }
+            set_eq_band(b, g) => { root.on_set_eq_band(b, g); }
+            select_eq_preset(p) => { root.on_select_eq_preset(p); }
+            set_volume_balance(m) => { root.on_set_volume_balance(m); }
+        }
+    }
+
+    // Modal 1: Hearing Safety Handshake
+    HearingSafetyModal {
+        is_visible: root.is_safety_modal_visible;
+        is_testing_audio: root.is_testing_audio;
+        test_volume <=> root.windows_master_volume;
+
+        confirm => { root.on_confirm_safety_modal(); }
+        toggle_test_audio => { root.on_toggle_test_audio(); }
+        set_test_volume(v) => { root.on_set_test_volume(v); }
+    }
+
+    // Modal 2: Audiophile Bit-Perfect Recommendation Dialog
+    AudiophileRecommendationModal {
+        is_visible: root.is_audiophile_modal_visible;
+
+        bypass_eq_confirmed => { root.on_confirm_bypass_eq(); }
+        keep_eq_confirmed => { root.on_confirm_keep_eq(); }
+    }
+}

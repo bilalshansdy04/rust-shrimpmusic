@@ -99,6 +99,7 @@ impl SearchEngine {
                 has_lyrics: row.get::<_, i64>(18)? == 1,
                 play_count: row.get::<_, i64>(19)? as u64,
                 last_played_at: row.get(20)?,
+                waveform: None,
                 is_active: row.get::<_, i64>(21)? == 1,
             })
         })?;
@@ -148,6 +149,7 @@ impl SearchEngine {
                 has_lyrics: row.get::<_, i64>(18)? == 1,
                 play_count: row.get::<_, i64>(19)? as u64,
                 last_played_at: row.get(20)?,
+                waveform: None,
                 is_active: row.get::<_, i64>(21)? == 1,
             })
         })?;
@@ -197,6 +199,7 @@ impl SearchEngine {
                 has_lyrics: row.get::<_, i64>(18)? == 1,
                 play_count: row.get::<_, i64>(19)? as u64,
                 last_played_at: row.get(20)?,
+                waveform: None,
                 is_active: row.get::<_, i64>(21)? == 1,
             })
         })?;

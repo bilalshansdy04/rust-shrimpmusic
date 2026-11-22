@@ -9,7 +9,7 @@ use wasapi::initialize_mta;
 
 use super::decoder::{SymphoniaDecoder, TrackAudioSpec};
 use super::device::DeviceManager;
-use super::dsp::{convert_f32_to_bytes, DspProcessor};
+use super::dsp::{convert_f32_to_bytes, DspProcessor, EqPreset, VolumeBalanceMode};
 use super::error::{AudioError, AudioResult};
 use super::wasapi_engine::WasapiStream;
 
@@ -23,6 +23,7 @@ pub enum PlayerState {
 #[derive(Debug)]
 pub enum AudioCommand {
     Play(PathBuf),
+    PlayTestTone,
     Pause,
     Resume,
     Stop,
@@ -30,6 +31,10 @@ pub enum AudioCommand {
     SetVolume(f32),
     SetExclusive(bool),
     SetDevice(Option<String>),
+    SetEqEnabled(bool),
+    SetEqBand { band: usize, gain_db: f32 },
+    SetEqPreset(EqPreset),
+    SetVolumeBalance(VolumeBalanceMode),
     Shutdown,
 }
 
@@ -81,6 +86,12 @@ impl AudioPlayer {
             .map_err(|_| AudioError::ChannelClosed)
     }
 
+    pub fn play_test_tone(&self) -> AudioResult<()> {
+        self.cmd_tx
+            .send(AudioCommand::PlayTestTone)
+            .map_err(|_| AudioError::ChannelClosed)
+    }
+
     pub fn pause(&self) -> AudioResult<()> {
         self.cmd_tx
             .send(AudioCommand::Pause)
@@ -120,6 +131,30 @@ impl AudioPlayer {
     pub fn set_device(&self, device_id: Option<String>) -> AudioResult<()> {
         self.cmd_tx
             .send(AudioCommand::SetDevice(device_id))
+            .map_err(|_| AudioError::ChannelClosed)
+    }
+
+    pub fn set_eq_enabled(&self, enabled: bool) -> AudioResult<()> {
+        self.cmd_tx
+            .send(AudioCommand::SetEqEnabled(enabled))
+            .map_err(|_| AudioError::ChannelClosed)
+    }
+
+    pub fn set_eq_band(&self, band: usize, gain_db: f32) -> AudioResult<()> {
+        self.cmd_tx
+            .send(AudioCommand::SetEqBand { band, gain_db })
+            .map_err(|_| AudioError::ChannelClosed)
+    }
+
+    pub fn set_eq_preset(&self, preset: EqPreset) -> AudioResult<()> {
+        self.cmd_tx
+            .send(AudioCommand::SetEqPreset(preset))
+            .map_err(|_| AudioError::ChannelClosed)
+    }
+
+    pub fn set_volume_balance(&self, mode: VolumeBalanceMode) -> AudioResult<()> {
+        self.cmd_tx
+            .send(AudioCommand::SetVolumeBalance(mode))
             .map_err(|_| AudioError::ChannelClosed)
     }
 
@@ -195,6 +230,9 @@ fn run_audio_worker(
                 AudioCommand::Play(path) => {
                     handle_play_command(&path, &mut state, &device_manager, &event_tx);
                 }
+                AudioCommand::PlayTestTone => {
+                    handle_play_test_tone(&mut state, &device_manager, &event_tx);
+                }
                 AudioCommand::Pause => {
                     if state.player_state == PlayerState::Playing {
                         state.player_state = PlayerState::Paused;
@@ -216,12 +254,21 @@ fn run_audio_worker(
                     let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Stopped));
                 }
                 AudioCommand::Seek(target) => {
+                    println!("[DEBUG AUDIO] Seek command received for target: {:?}", target);
                     if let Some(ref mut decoder) = state.decoder {
-                        if let Ok(actual) = decoder.seek(target) {
-                            state.current_position = actual;
-                            state.sample_queue.clear();
-                            let _ = event_tx.send(AudioEvent::Position(actual));
+                        match decoder.seek(target) {
+                            Ok(actual) => {
+                                println!("[DEBUG AUDIO] Decoder seek succeeded, actual pos: {:?}", actual);
+                                state.current_position = actual;
+                                state.sample_queue.clear();
+                                let _ = event_tx.send(AudioEvent::Position(actual));
+                            }
+                            Err(e) => {
+                                eprintln!("[DEBUG AUDIO] Decoder seek failed: {:?}", e);
+                            }
                         }
+                    } else {
+                        eprintln!("[DEBUG AUDIO] Cannot seek: state.decoder is None");
                     }
                 }
                 AudioCommand::SetVolume(vol) => {
@@ -254,6 +301,18 @@ fn run_audio_worker(
                             }
                         }
                     }
+                }
+                AudioCommand::SetEqEnabled(en) => {
+                    state.dsp.equalizer_mut().set_enabled(en);
+                }
+                AudioCommand::SetEqBand { band, gain_db } => {
+                    state.dsp.equalizer_mut().set_band_gain(band, gain_db);
+                }
+                AudioCommand::SetEqPreset(preset) => {
+                    state.dsp.equalizer_mut().apply_preset(preset);
+                }
+                AudioCommand::SetVolumeBalance(mode) => {
+                    state.dsp.set_volume_balance(mode);
                 }
                 AudioCommand::Shutdown => {
                     state.stream = None;
@@ -348,10 +407,63 @@ fn handle_play_command(
     let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Playing));
 }
 
+fn handle_play_test_tone(
+    state: &mut WorkerState,
+    dm: &DeviceManager,
+    event_tx: &Sender<AudioEvent>,
+) {
+    let device = match dm.get_device(state.target_device_id.as_deref()) {
+        Ok(dev) => dev,
+        Err(e) => {
+            let _ = event_tx.send(AudioEvent::Error(format!("Failed to get device: {}", e)));
+            return;
+        }
+    };
+
+    let device_name = device
+        .get_friendlyname()
+        .unwrap_or_else(|_| "Audio Device".to_string());
+
+    let stream = match WasapiStream::open(&device, 44100, 2, Some(16), false) {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = event_tx.send(AudioEvent::Error(format!("WASAPI stream open error: {}", e)));
+            return;
+        }
+    };
+
+    let actual_sr = stream.sample_rate();
+    let actual_ch = stream.channels() as u16;
+
+    let chime_samples = crate::audio::SafetyTestSignal::generate_10s_chime(actual_sr, actual_ch);
+    let raw_bytes = convert_f32_to_bytes(&chime_samples, stream.target_sample_format());
+
+    state.decoder = None;
+    state.stream = Some(stream);
+    state.current_path = None;
+    state.sample_queue = raw_bytes;
+    state.player_state = PlayerState::Playing;
+    state.current_position = Duration::ZERO;
+    state.last_position_update = Instant::now();
+
+    let _ = event_tx.send(AudioEvent::TrackStarted {
+        spec: TrackAudioSpec {
+            sample_rate: actual_sr,
+            channels: actual_ch as usize,
+            bit_depth: Some(16),
+            duration: Some(Duration::from_secs(10)),
+            codec_name: "Safety Tone".to_string(),
+        },
+        is_exclusive: false,
+        device_name,
+    });
+    let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Playing));
+}
+
 fn process_playback_tick(state: &mut WorkerState, event_tx: &Sender<AudioEvent>) {
-    let (stream, decoder) = match (state.stream.as_mut(), state.decoder.as_mut()) {
-        (Some(s), Some(d)) => (s, d),
-        _ => return,
+    let stream = match state.stream.as_mut() {
+        Some(s) => s,
+        None => return,
     };
 
     let bytes_per_frame = stream.bytes_per_frame();
@@ -359,41 +471,52 @@ fn process_playback_tick(state: &mut WorkerState, event_tx: &Sender<AudioEvent>)
         return;
     }
 
-    while state.sample_queue.len() < bytes_per_frame * 2048 {
-        match decoder.next_packet_samples() {
-            Ok(Some(samples)) => {
-                let frame_count = samples.len() / decoder.spec().channels;
-                let frame_duration = Duration::from_secs_f64(frame_count as f64 / decoder.spec().sample_rate as f64);
-                state.current_position += frame_duration;
+    if let Some(ref mut decoder) = state.decoder {
+        while state.sample_queue.len() < bytes_per_frame * 2048 {
+            match decoder.next_packet_samples() {
+                Ok(Some(samples)) => {
+                    let frame_count = samples.len() / decoder.spec().channels;
+                    let frame_duration = Duration::from_secs_f64(frame_count as f64 / decoder.spec().sample_rate as f64);
+                    state.current_position += frame_duration;
 
-                let processed = match state.dsp.process_samples(samples) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        let _ = event_tx.send(AudioEvent::Error(format!("DSP error: {}", e)));
-                        break;
+                    let processed = match state.dsp.process_samples(samples) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            let _ = event_tx.send(AudioEvent::Error(format!("DSP error: {}", e)));
+                            break;
+                        }
+                    };
+
+                    let raw_bytes = convert_f32_to_bytes(&processed, stream.target_sample_format());
+                    state.sample_queue.extend_from_slice(&raw_bytes);
+                }
+                Ok(None) => {
+                    if state.sample_queue.is_empty() {
+                        state.player_state = PlayerState::Stopped;
+                        state.stream = None;
+                        state.decoder = None;
+                        let _ = event_tx.send(AudioEvent::EndOfTrack);
+                        let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Stopped));
+                        return;
                     }
-                };
-
-                let raw_bytes = convert_f32_to_bytes(&processed, stream.target_sample_format());
-                state.sample_queue.extend_from_slice(&raw_bytes);
-            }
-            Ok(None) => {
-                if state.sample_queue.is_empty() {
+                    break;
+                }
+                Err(e) => {
+                    let _ = event_tx.send(AudioEvent::Error(format!("Decode error: {}", e)));
                     state.player_state = PlayerState::Stopped;
-                    state.stream = None;
-                    state.decoder = None;
-                    let _ = event_tx.send(AudioEvent::EndOfTrack);
                     let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Stopped));
                     return;
                 }
-                break;
             }
-            Err(e) => {
-                let _ = event_tx.send(AudioEvent::Error(format!("Decode error: {}", e)));
-                state.player_state = PlayerState::Stopped;
-                let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Stopped));
-                return;
-            }
+        }
+    } else {
+        // Nada uji chime (tanpa decoder)
+        if state.sample_queue.is_empty() {
+            state.player_state = PlayerState::Stopped;
+            state.stream = None;
+            let _ = event_tx.send(AudioEvent::EndOfTrack);
+            let _ = event_tx.send(AudioEvent::StateChanged(PlayerState::Stopped));
+            return;
         }
     }
 

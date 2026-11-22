@@ -1,0 +1,171 @@
+import { ThemePalette } from "../theme.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+export component TransportControls inherits Rectangle {
+    in property <bool> is_playing: false;
+    in property <bool> is_shuffle: false;
+    in property <int> shuffle_style: 0; // 0: ReducedRepeat, 1: Normal, 2: Favffle
+    in property <int> loop_mode: 0;    // 0: Off, 1: All, 2: One
+    in property <float> volume: 0.7;
+    in property <bool> is_volume_popup_open: false;
+
+    callback toggle_play();
+    callback previous();
+    callback next();
+    callback toggle_shuffle();
+    callback cycle_loop();
+    callback set_volume(float);
+    callback toggle_volume_popup();
+
+    height: 72px;
+    background: transparent;
+
+    // Unified centered playback controls + tap-to-toggle volume
+    HorizontalLayout {
+        alignment: center;
+        spacing: 12px;
+
+        // Shuffle Button
+        Rectangle {
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            background: shuf_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+            y: (parent.height - self.height) / 2;
+
+            IconDisplay {
+                icon: root.shuffle_style == 2 ? IconSet.Star : (root.shuffle_style == 1 ? IconSet.Dices : IconSet.Shuffle);
+                size: 18px;
+                stroke: root.is_shuffle ? ThemePalette.accent_primary : ThemePalette.text_muted;
+                stroke-width: 2.0;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            shuf_touch := TouchArea {
+                clicked => { root.toggle_shuffle(); }
+            }
+        }
+
+        // Previous Button
+        Rectangle {
+            width: 42px;
+            height: 42px;
+            border-radius: 21px;
+            background: prev_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+            y: (parent.height - self.height) / 2;
+
+            IconDisplay {
+                icon: IconSet.SkipBack;
+                size: 20px;
+                stroke: prev_touch.has-hover ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                stroke-width: 2.0;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            prev_touch := TouchArea {
+                clicked => { root.previous(); }
+            }
+        }
+
+        // Play / Pause Primary Button
+        Rectangle {
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
+            background: play_touch.has-hover ? ThemePalette.accent_primary.brighter(15%) : ThemePalette.accent_primary;
+            y: (parent.height - self.height) / 2;
+            animate background { duration: 120ms; }
+
+            IconDisplay {
+                icon: root.is_playing ? IconSet.Pause : IconSet.Play;
+                size: 24px;
+                stroke: #FFFFFF;
+                stroke-width: 2.4;
+                stroke-fill: #FFFFFF;
+                x: (parent.width - self.width) / 2 + (root.is_playing ? 0px : 1.5px);
+                y: (parent.height - self.height) / 2;
+            }
+
+            play_touch := TouchArea {
+                clicked => { root.toggle_play(); }
+            }
+        }
+
+        // Next Button
+        Rectangle {
+            width: 42px;
+            height: 42px;
+            border-radius: 21px;
+            background: next_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+            y: (parent.height - self.height) / 2;
+
+            IconDisplay {
+                icon: IconSet.SkipForward;
+                size: 20px;
+                stroke: next_touch.has-hover ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                stroke-width: 2.0;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            next_touch := TouchArea {
+                clicked => { root.next(); }
+            }
+        }
+
+        // Loop / Repeat Button
+        Rectangle {
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            background: loop_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+            y: (parent.height - self.height) / 2;
+
+            IconDisplay {
+                icon: root.loop_mode == 2 ? IconSet.Repeat1 : IconSet.Repeat;
+                size: 18px;
+                stroke: root.loop_mode != 0 ? ThemePalette.accent_primary : ThemePalette.text_muted;
+                stroke-width: 2.0;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            loop_touch := TouchArea {
+                clicked => { root.cycle_loop(); }
+            }
+        }
+
+        // Volume Tap Button (Toggles Material Volume Slider Popup)
+        Rectangle {
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            background: root.is_volume_popup_open ? ThemePalette.accent_subtle :
+                       (vol_btn_touch.has-hover ? ThemePalette.bg_elevated : transparent);
+            y: (parent.height - self.height) / 2;
+
+            IconDisplay {
+                icon: root.volume == 0.0 ? IconSet.VolumeX : (root.volume < 0.5 ? IconSet.Volume1 : IconSet.Volume2);
+                size: 18px;
+                stroke: root.is_volume_popup_open ? ThemePalette.accent_primary :
+                       (vol_btn_touch.has-hover ? ThemePalette.text_primary : ThemePalette.text_secondary);
+                stroke-width: 2.0;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            vol_btn_touch := TouchArea {
+                clicked => {
+                    root.toggle_volume_popup();
+                }
+                scroll-event(event) => {
+                    let delta = event.delta-y / 120px;
+                    root.set_volume(Math.min(1.0, Math.max(0.0, root.volume + delta * 0.05)));
+                    accept
+                }
+            }
+        }
+    }
+}

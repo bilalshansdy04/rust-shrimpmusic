@@ -1,0 +1,23 @@
+export global ThemePalette {
+    in-out property <bool> is_dark: true;
+    in-out property <color> custom_accent: #FF5A36;
+    in-out property <bool> use_custom_accent: false;
+
+    // Backgrounds
+    out property <color> bg_base: is_dark ? #000000 : #F5F5F7;
+    out property <color> bg_surface: is_dark ? #0E0E11 : #FFFFFF;
+    out property <color> bg_elevated: is_dark ? #18181D : #EAEAEF;
+    out property <color> bg_hover: is_dark ? #22222A : #E2E2E8;
+
+    // Borders
+    out property <color> border_subtle: is_dark ? #24242B : #DCDCE2;
+
+    // Typography
+    out property <color> text_primary: is_dark ? #F4F4F6 : #121215;
+    out property <color> text_secondary: is_dark ? #8E8E98 : #686873;
+    out property <color> text_muted: is_dark ? #565660 : #9E9EA8;
+
+    // Accents
+    out property <color> accent_primary: use_custom_accent ? custom_accent : (is_dark ? #FF5A36 : #E64825);
+    out property <color> accent_subtle: is_dark ? #3A1810 : #FFE8E2;
+}
