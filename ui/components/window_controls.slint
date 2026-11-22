@@ -19,12 +19,12 @@ export component WindowControls inherits Rectangle {
             spacing: 8px;
             y: (parent.height - self.height) / 2;
             
-            // Vector Shrimp / Music Dot Logo Icon
-            Rectangle {
-                width: 14px;
-                height: 14px;
-                border-radius: 7px;
-                background: ThemePalette.accent_primary;
+            // App Logo Icon
+            Image {
+                source: @image-url("../../assets/logo.png");
+                width: 20px;
+                height: 20px;
+                image-fit: contain;
                 y: (parent.height - self.height) / 2;
             }
 

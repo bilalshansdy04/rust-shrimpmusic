@@ -1,6 +1,13 @@
 use std::{collections::HashMap, path::PathBuf};
 
 fn main() {
+    #[cfg(windows)]
+    {
+        let mut res = winres::WindowsResource::new();
+        res.set_icon("assets/logo.ico");
+        let _ = res.compile();
+    }
+
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let library = HashMap::from([
         ("lucide".to_string(), PathBuf::from(lucide_slint::lib())),
