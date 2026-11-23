@@ -98,9 +98,16 @@ impl Scanner {
                 .map(|d| d.as_secs() as i64)
                 .unwrap_or(0);
 
-            // Fast skip check
+            // Fast skip check: if already in DB with same file size and mod time,
+            // ensure folder_id is up to date and skip heavy metadata extraction!
             if let Ok(Some(existing)) = db.get_track_by_path(&path_str) {
                 if existing.file_size == file_size && existing.modified_time == modified_time {
+                    if existing.folder_id != folder_id {
+                        let _ = db.conn().execute(
+                            "UPDATE tracks SET folder_id = ?1 WHERE path = ?2",
+                            rusqlite::params![folder_id, &path_str],
+                        );
+                    }
                     unchanged += 1;
                     if let Some(tx) = progress_tx {
                         let _ = tx.send(ScanProgress::FileScanned {

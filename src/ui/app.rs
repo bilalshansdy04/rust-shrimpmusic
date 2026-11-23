@@ -863,12 +863,15 @@ impl ShrimpMusicApp {
 
         // 17. Rescan single folder
         let w_rescan = win_weak.clone();
-        let app_scope = self.active_scope.get();
-        let app_sort = self.sort_criteria.get();
-        let app_asc = self.sort_ascending.get();
+        let app_scope_rescan = self.active_scope.clone();
+        let app_sort_rescan = self.sort_criteria.clone();
+        let app_asc_rescan = self.sort_ascending.clone();
         self.window.on_on_rescan_folder(move |folder_id| {
             let w_c = w_rescan.clone();
             let db_path = default_db_path();
+            let cur_scope = app_scope_rescan.get();
+            let cur_sort = app_sort_rescan.get();
+            let cur_asc = app_asc_rescan.get();
             std::thread::spawn(move || {
                 if let Ok(worker_db) = open_database(&db_path) {
                     if let Ok(folders) = worker_db.get_all_folders() {
@@ -884,25 +887,8 @@ impl ShrimpMusicApp {
 
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(w) = w_c.upgrade() {
-                                    if let Ok(tracks) = worker_db.list_tracks(app_scope, app_sort, app_asc) {
-                                        let models: Vec<TrackItemModel> = tracks
-                                            .iter()
-                                            .map(|t| {
-                                                let duration_sec = t.duration_ms / 1000;
-                                                let mins = duration_sec / 60;
-                                                let secs = duration_sec % 60;
-                                                TrackItemModel {
-                                                    id: t.id as i32,
-                                                    title: SharedString::from(t.title.clone()),
-                                                    artist: SharedString::from(t.artist.clone()),
-                                                    album: SharedString::from(t.album.clone()),
-                                                    duration_str: SharedString::from(format!("{}:{:02}", mins, secs)),
-                                                    format: SharedString::from(t.format.clone()),
-                                                    is_hi_res: t.sample_rate >= 88200 || t.bit_depth >= 24,
-                                                    is_active: t.is_active,
-                                                }
-                                            })
-                                            .collect();
+                                    if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
+                                        let models = Self::convert_tracks_to_models(&tracks);
                                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                                     }
                                 }
@@ -953,12 +939,15 @@ impl ShrimpMusicApp {
 
         // 21. Native Windows File Explorer - Add Music Folder Dialog
         let win_add = win_weak.clone();
-        let app_scope = self.active_scope.get();
-        let app_sort = self.sort_criteria.get();
-        let app_asc = self.sort_ascending.get();
+        let app_scope_add = self.active_scope.clone();
+        let app_sort_add = self.sort_criteria.clone();
+        let app_asc_add = self.sort_ascending.clone();
 
         self.window.on_on_add_folder_clicked(move || {
             let win_c = win_add.clone();
+            let cur_scope_ref = app_scope_add.clone();
+            let cur_sort = app_sort_add.get();
+            let cur_asc = app_asc_add.get();
 
             std::thread::spawn(move || {
                 if let Some(folder_path) = rfd::FileDialog::new()
@@ -1050,12 +1039,13 @@ impl ShrimpMusicApp {
                                     w.set_is_scanning(false);
 
                                     // 1. Refresh folder scopes & settings folders
+                                    let cur_scope = cur_scope_ref.get();
                                     if let Ok(folders) = worker_db.get_all_folders() {
                                         let mut folder_models = Vec::new();
                                         let mut scope_models = vec![FolderScopeModel {
                                             id: -1,
                                             display_name: SharedString::from("Semua Folder"),
-                                            is_selected: app_scope.is_none(),
+                                            is_selected: cur_scope.is_none(),
                                         }];
 
                                         for f in &folders {
@@ -1075,7 +1065,7 @@ impl ShrimpMusicApp {
                                                 scope_models.push(FolderScopeModel {
                                                     id: f.id as i32,
                                                     display_name: SharedString::from(folder_name.to_string()),
-                                                    is_selected: app_scope == Some(f.id),
+                                                    is_selected: cur_scope == Some(f.id),
                                                 });
                                             }
                                         }
@@ -1085,26 +1075,8 @@ impl ShrimpMusicApp {
                                     }
 
                                     // 2. Refresh library tracks
-                                    if let Ok(tracks) = worker_db.list_tracks(app_scope, app_sort, app_asc) {
-                                        let models: Vec<TrackItemModel> = tracks
-                                            .iter()
-                                            .map(|t| {
-                                                let duration_sec = t.duration_ms / 1000;
-                                                let mins = duration_sec / 60;
-                                                let secs = duration_sec % 60;
-                                                TrackItemModel {
-                                                    id: t.id as i32,
-                                                    title: SharedString::from(t.title.clone()),
-                                                    artist: SharedString::from(t.artist.clone()),
-                                                    album: SharedString::from(t.album.clone()),
-                                                    duration_str: SharedString::from(format!("{}:{:02}", mins, secs)),
-                                                    format: SharedString::from(t.format.clone()),
-                                                    is_hi_res: t.sample_rate >= 88200 || t.bit_depth >= 24,
-                                                    is_active: t.is_active,
-                                                }
-                                            })
-                                            .collect();
-
+                                    if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
+                                        let models = Self::convert_tracks_to_models(&tracks);
                                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                                     }
                                 }

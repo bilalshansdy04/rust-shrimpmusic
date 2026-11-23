@@ -13,6 +13,22 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
 
+### [DONE-27 / UDAH] Perbaikan Isolasi Cakupan Folder (Folder Scope Isolation) & Analisis Efisiensi Artwork List
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
+  1. **Akar Masalah Percampuran Lagu Antar-Folder:**
+     - Pada thread asinkron `on_add_folder_clicked` dan `on_rescan_folder` di [src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs), nilai variabel `app_scope` sebelumnya ditangkap melalui nilai copy lama (`self.active_scope.get()`) saat startup alih-alih referensi reaktif dinamis `Cell`. Akibatnya setelah pemindaian selesai, query refresh lagu memanggil parameter cakupan yang stale atau me-reset folder yang sedang dipilih.
+     - Pada [src/library/scanner.rs](file:///d:/Projects/music/rust/src/library/scanner.rs), jalur *fast-skip* ketika lagu telah ada di database sebelumnya tidak memvalidasi ulang `folder_id` jika lagu tersebut dipindahkan atau didaftarkan ulang ke folder lain.
+  2. **Solusi Perbaikan:**
+     - Memperbaiki pembagian referensi reaktif `Rc<Cell<Option<i64>>>` pada closure `on_add_folder_clicked` dan `on_rescan_folder` sehingga query lagu selalu membaca `active_scope` yang saat ini sedang aktif dipilih oleh pengguna secara real-time.
+     - Menambahkan sinkronisasi `folder_id` otomatis pada pemindai library bila terdapat lagu yang berpindah folder.
+  3. **Hasil Evaluasi Teknis Artwork pada Track List:**
+     - Analisis arsitektur memori: Menampilkan thumbnail cover art di setiap baris lagu pada playlist/library berisiko memicu lonjakan alokasi texture bitmap RAM (misal 500 lagu x 40x40 RGBA = ratusan Surface textures) yang dapat merusak komitmen low-memory (< 100 MB).
+     - Solusi terbaik: Cover art tetap disajikan secara penuh di *The Acoustic Stage* kiri (220x220px) dan kartu Now Playing atas antrean, sedangkan baris lagu mempertahankan performa tinggi yang ringan dan hemat RAM.
+- **Hasil Pengujian:** Seluruh 19 unit & integration test lulus 100% (`cargo test -- --test-threads=1`), build rilis sukses 0 error.
+
+---
+
 ### [DONE-26 / UDAH] Perbaikan System Tray Icon (Embedded Binary Asset) & Penambahan Filter Urutan Lagu (Nama, Artis, Album, Tanggal & Asc/Desc)
 - **Udah diperbaiki tanggal 11/23/2026**
 - **Detail Implementasi:**
