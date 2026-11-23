@@ -7,7 +7,19 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 📋 Antrean Aktif
 
-*(Semua antrean prioritas dan temuan pending per tanggal 11/18/2026 - 11/23/2026 telah berhasil diselesaikan dan diverifikasi 100% lulus pengujian)*
+### [PENDING-03] Perombakan Antrean Pemutar (Queue View Interactivity, Swipe-to-Remove, Drag-to-Reorder, Now Playing Pin, & Reshuffle)
+- **Prioritas:** Tinggi
+- **Deskripsi Kebutuhan & Fitur:**
+  1. **Now Playing Selalu di Paling Atas (*Pinned Top*):**
+     - Lagu yang sedang aktif diputar disematkan di posisi teratas antrean dengan kartu khusus yang menonjol (indikator visual playing, durasi berjalan, artwork, dan badge).
+  2. **Interaktivitas Geser / Gesture:**
+     - **Geser Kiri/Kanan (*Swipe-to-Remove*):** Pengguna dapat menggeser item lagu ke kanan atau ke kiri secara interaktif untuk menghapus lagu tersebut dari antrean pemutaran (disertai feedback visual transisi halus atau tombol hapus cepat).
+     - **Geser Atas/Bawah (*Drag-to-Reorder*):** Pengguna dapat menata ulang urutan daftar antrean lagu berikutnya secara manual dengan menarik (*drag & drop*) posisi lagu ke atas atau ke bawah.
+  3. **Alur Urutan Lagu Berikutnya (Normal vs Shuffle):**
+     - Jika mode **Shuffle OFF**: Lagu berikutnya di antrean disusun lurus sesuai urutan album/folder aslinya.
+     - Jika mode **Shuffle ON**: Lagu berikutnya di antrean langsung diacak secara cerdas sesuai algoritma shuffle yang aktif.
+  4. **Tombol Acak Ulang Antrean (*Reshuffle Queue*):**
+     - Menyediakan tombol aksi **`[ 🔀 Acak Ulang Antrean ]`** di bagian atas antrean, sehingga jika pengguna kurang menyukai susunan acak saat ini, pengguna dapat dengan 1 klik mengocok ulang urutan lagu antrean berikutnya tanpa menghentikan lagu yang sedang diputar.
 
 ---
 
