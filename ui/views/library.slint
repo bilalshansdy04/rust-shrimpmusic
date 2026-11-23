@@ -27,11 +27,13 @@ export component LibraryView inherits Rectangle {
     in property <int> total_folders: 0;
     in property <bool> is_scanning: false;
     in property <string> scan_status_text: "Memindai folder musik...";
+    in property <int> sort_criteria: 0; // 0: Title, 1: Artist, 2: Album, 5: DateAdded
+    in property <bool> sort_ascending: true;
 
     callback track_selected(int);
     callback track_double_clicked(int);
     callback scope_changed(int);
-    callback sort_changed(int);
+    callback sort_changed(int, bool);
     callback add_folder_clicked();
 
     background: transparent;
@@ -161,6 +163,195 @@ export component LibraryView inherits Rectangle {
 
                 add_touch := TouchArea {
                     clicked => { root.add_folder_clicked(); }
+                }
+            }
+        }
+
+        // Sorting Sub-bar (Filter urutan: Judul, Artis, Album, Tgl Ditambahkan & Asc/Desc)
+        if root.tracks.length > 0 : HorizontalLayout {
+            height: 28px;
+            alignment: space-between;
+
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+
+                Text {
+                    text: "Urutkan:";
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: ThemePalette.text_muted;
+                    vertical-alignment: center;
+                }
+
+                // 1. Judul / Nama (SortCriteria = 0)
+                Rectangle {
+                    height: 24px;
+                    border-radius: 12px;
+                    background: root.sort_criteria == 0 ? ThemePalette.accent_subtle : (t_sort.has-hover ? ThemePalette.bg_hover : transparent);
+                    border-width: 1px;
+                    border-color: root.sort_criteria == 0 ? ThemePalette.accent_primary : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: center;
+
+                        Text {
+                            text: "Nama";
+                            font-size: 11px;
+                            font-weight: root.sort_criteria == 0 ? 700 : 500;
+                            color: root.sort_criteria == 0 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    t_sort := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 0 {
+                                root.sort_changed(0, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(0, true);
+                            }
+                        }
+                    }
+                }
+
+                // 2. Artis (SortCriteria = 1)
+                Rectangle {
+                    height: 24px;
+                    border-radius: 12px;
+                    background: root.sort_criteria == 1 ? ThemePalette.accent_subtle : (a_sort.has-hover ? ThemePalette.bg_hover : transparent);
+                    border-width: 1px;
+                    border-color: root.sort_criteria == 1 ? ThemePalette.accent_primary : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: center;
+
+                        Text {
+                            text: "Artis";
+                            font-size: 11px;
+                            font-weight: root.sort_criteria == 1 ? 700 : 500;
+                            color: root.sort_criteria == 1 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    a_sort := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 1 {
+                                root.sort_changed(1, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(1, true);
+                            }
+                        }
+                    }
+                }
+
+                // 3. Album (SortCriteria = 2)
+                Rectangle {
+                    height: 24px;
+                    border-radius: 12px;
+                    background: root.sort_criteria == 2 ? ThemePalette.accent_subtle : (al_sort.has-hover ? ThemePalette.bg_hover : transparent);
+                    border-width: 1px;
+                    border-color: root.sort_criteria == 2 ? ThemePalette.accent_primary : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: center;
+
+                        Text {
+                            text: "Album";
+                            font-size: 11px;
+                            font-weight: root.sort_criteria == 2 ? 700 : 500;
+                            color: root.sort_criteria == 2 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    al_sort := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 2 {
+                                root.sort_changed(2, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(2, true);
+                            }
+                        }
+                    }
+                }
+
+                // 4. Tanggal Ditambahkan (SortCriteria = 5)
+                Rectangle {
+                    height: 24px;
+                    border-radius: 12px;
+                    background: root.sort_criteria == 5 ? ThemePalette.accent_subtle : (d_sort.has-hover ? ThemePalette.bg_hover : transparent);
+                    border-width: 1px;
+                    border-color: root.sort_criteria == 5 ? ThemePalette.accent_primary : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: center;
+
+                        Text {
+                            text: "Tanggal Ditambahkan";
+                            font-size: 11px;
+                            font-weight: root.sort_criteria == 5 ? 700 : 500;
+                            color: root.sort_criteria == 5 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    d_sort := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 5 {
+                                root.sort_changed(5, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(5, false); // Tanggal default descending (terbaru)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Direction Toggle Button (Ascending / Descending)
+            Rectangle {
+                height: 24px;
+                border-radius: 12px;
+                background: dir_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
+                border-width: 1px;
+                border-color: ThemePalette.border_subtle;
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 4px;
+                    alignment: center;
+
+                    IconDisplay {
+                        icon: root.sort_ascending ? IconSet.ChevronUp : IconSet.ChevronDown;
+                        size: 12px;
+                        stroke: ThemePalette.accent_primary;
+                        stroke-width: 2.5;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    Text {
+                        text: root.sort_ascending ? "Menaik (A-Z / Lama)" : "Menurun (Z-A / Baru)";
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: ThemePalette.text_secondary;
+                        vertical-alignment: center;
+                    }
+                }
+
+                dir_touch := TouchArea {
+                    clicked => {
+                        root.sort_changed(root.sort_criteria, !root.sort_ascending);
+                    }
                 }
             }
         }

@@ -1,6 +1,7 @@
-use std::path::Path;
 use muda::{Menu, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
+
+const EMBEDDED_ICON_BYTES: &[u8] = include_bytes!("../../assets/logo_small.png");
 
 pub struct TrayController {
     _tray: TrayIcon,
@@ -10,7 +11,7 @@ pub struct TrayController {
 }
 
 impl TrayController {
-    pub fn new<P: AsRef<Path>>(icon_path: P) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let menu = Menu::new();
 
         let show_item = MenuItem::new("Buka ShrimpMusic", true, None);
@@ -27,7 +28,7 @@ impl TrayController {
         menu.append(&sep)?;
         menu.append(&exit_item)?;
 
-        let icon = Self::load_icon(icon_path)?;
+        let icon = Self::load_embedded_icon()?;
 
         let tray = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
@@ -43,8 +44,8 @@ impl TrayController {
         })
     }
 
-    fn load_icon<P: AsRef<Path>>(path: P) -> Result<Icon, Box<dyn std::error::Error>> {
-        let img = image::open(path)?.into_rgba8();
+    fn load_embedded_icon() -> Result<Icon, Box<dyn std::error::Error>> {
+        let img = image::load_from_memory(EMBEDDED_ICON_BYTES)?.into_rgba8();
         let (width, height) = img.dimensions();
         let rgba = img.into_raw();
         let icon = Icon::from_rgba(rgba, width, height)?;

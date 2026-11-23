@@ -118,11 +118,25 @@ impl ShrimpMusicApp {
         window.set_windows_master_volume(win_volume.get_volume());
         let device_watcher = crate::audio::DeviceWatcher::new();
 
-        let tray = Rc::new(RefCell::new(
-            TrayController::new("assets/logo_small.png")
-                .or_else(|_| TrayController::new("assets/logo.png"))
-                .ok(),
-        ));
+        let tray = Rc::new(RefCell::new(TrayController::new().ok()));
+
+        let sort_criteria = db
+            .get_preference("sort_criteria")
+            .ok()
+            .flatten()
+            .and_then(|s| s.parse::<i32>().ok())
+            .map(SortCriteria::from_i32)
+            .unwrap_or(SortCriteria::Title);
+
+        let sort_ascending = db
+            .get_preference("sort_ascending")
+            .ok()
+            .flatten()
+            .map(|s| s != "0")
+            .unwrap_or(true);
+
+        window.set_library_sort_criteria(sort_criteria.to_i32());
+        window.set_library_sort_ascending(sort_ascending);
 
         let app = Self {
             window,
@@ -132,8 +146,8 @@ impl ShrimpMusicApp {
             taskbar,
             tray,
             active_scope: Cell::new(None),
-            sort_criteria: Cell::new(SortCriteria::Title),
-            sort_ascending: Cell::new(true),
+            sort_criteria: Cell::new(sort_criteria),
+            sort_ascending: Cell::new(sort_ascending),
             last_lyrics_scroll_time,
             _timer: timer,
             win_volume,
@@ -472,6 +486,31 @@ impl ShrimpMusicApp {
                 }
 
                 if let Ok(tracks) = db_scope.list_tracks(target_scope, app_sort.get(), app_asc.get()) {
+                    let models = Self::convert_tracks_to_models(&tracks);
+                    w.set_library_tracks(ModelRc::new(VecModel::from(models)));
+                }
+            }
+        });
+
+        // 8a2. Sort changed (Title, Artist, Album, DateAdded & Ascending/Descending)
+        let w_sort = win_weak.clone();
+        let db_sort = db.clone();
+        let app_scope_sort = self.active_scope.clone();
+        let app_sort_crit = self.sort_criteria.clone();
+        let app_sort_asc = self.sort_ascending.clone();
+        self.window.on_on_sort_changed(move |crit_id, asc| {
+            let criteria = SortCriteria::from_i32(crit_id);
+            app_sort_crit.set(criteria);
+            app_sort_asc.set(asc);
+
+            let _ = db_sort.set_preference("sort_criteria", &crit_id.to_string());
+            let _ = db_sort.set_preference("sort_ascending", if asc { "1" } else { "0" });
+
+            if let Some(w) = w_sort.upgrade() {
+                w.set_library_sort_criteria(crit_id);
+                w.set_library_sort_ascending(asc);
+
+                if let Ok(tracks) = db_sort.list_tracks(app_scope_sort.get(), criteria, asc) {
                     let models = Self::convert_tracks_to_models(&tracks);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                 }

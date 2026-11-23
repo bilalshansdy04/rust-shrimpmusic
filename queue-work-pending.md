@@ -13,6 +13,24 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
 
+### [DONE-26 / UDAH] Perbaikan System Tray Icon (Embedded Binary Asset) & Penambahan Filter Urutan Lagu (Nama, Artis, Album, Tanggal & Asc/Desc)
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
+  1. **Perbaikan Masalah System Tray Icon:**
+     - **Penyebab:** Sebelumnya pemuatan icon menggunakan path relatif disk (`assets/logo_small.png`). Ketika aplikasi dieksekusi dari target build, folder lain, atau saat di-install/di-pin, path relatif tersebut menghasilkan error file tidak ditemukan (*file not found*), menyebabkan inisialisasi tray gagal diam-diam (*silent fail*) dan window tidak masuk ke system tray.
+     - **Solusi:** Menggunakan macro bawaan Rust `include_bytes!("../../assets/logo_small.png")` di [src/ui/tray.rs](file:///d:/Projects/music/rust/src/ui/tray.rs) sehingga aset gambar logo ter-embed 100% langsung di dalam file biner executable `.exe`. System tray kini dijamin selalu aktif dan muncul di taskbar notification area terlepas dari lokasi direktori kerja aplikasi.
+  2. **Penambahan Filter Pengurutan Lagu di Pustaka ([ui/views/library.slint](file:///d:/Projects/music/rust/ui/views/library.slint)):**
+     - Menghadirkan bar kontrol pengurutan elegan di atas daftar lagu dengan 4 kriteria utama:
+       - **Nama (Judul Lagu):** Mengurutkan lagu berdasarkan abjad judul lagu.
+       - **Artis:** Mengurutkan berdasarkan nama artis penyanyi.
+       - **Album:** Mengurutkan berdasarkan nama album.
+       - **Tanggal Ditambahkan:** Mengurutkan berdasarkan waktu file ditambahkan/dimodifikasi.
+     - Menyediakan tombol pembalik arah urutan interaktif: **Menaik (*Ascending* / A-Z / Terlama)** dan **Menurun (*Descending* / Z-A / Terbaru)**.
+     - Mengintegrasikan callback `on_sort_changed(crit, asc)` di [src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs) yang secara instan menyaring dan menyusun ulang lagu di SQLite serta menyimpan preferensi pengguna (`sort_criteria` dan `sort_ascending`) secara permanen.
+- **Hasil Pengujian:** Seluruh 19 unit & integration test lulus 100% (`cargo test -- --test-threads=1`), build rilis sukses 0 error.
+
+---
+
 ### [DONE-25 / UDAH] Perombakan Antrean Pemutar (Queue View Interactivity, Swipe-to-Remove, Move Up/Down, Now Playing Pin, & Reshuffle)
 - **Udah diperbaiki tanggal 11/23/2026**
 - **Detail Implementasi:**

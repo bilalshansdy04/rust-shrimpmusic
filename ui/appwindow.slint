@@ -78,6 +78,8 @@ export component AppWindow inherits Window {
     in property <bool> is_audiophile_modal_visible: false;
     in property <bool> is_scanning: false;
     in property <string> scan_status_text: "Memindai folder musik...";
+    in property <int> library_sort_criteria: 0;
+    in property <bool> library_sort_ascending: true;
 
     // --- Internal UI States ---
     in-out property <int> active_view: 0; // 0: Library, 1: Playlist, 2: Lyrics, 3: Queue
@@ -95,6 +97,7 @@ export component AppWindow inherits Window {
     callback on_track_selected(int);
     callback on_track_double_clicked(int);
     callback on_scope_changed(int);
+    callback on_sort_changed(int, bool);
     callback on_search_changed(string);
     callback on_add_folder_clicked();
 
@@ -323,10 +326,13 @@ export component AppWindow inherits Window {
                         total_folders: root.settings_folders.length;
                         is_scanning: root.is_scanning;
                         scan_status_text: root.scan_status_text;
+                        sort_criteria: root.library_sort_criteria;
+                        sort_ascending: root.library_sort_ascending;
 
                         track_selected(id) => { root.on_track_selected(id); }
                         track_double_clicked(id) => { root.on_track_double_clicked(id); }
                         scope_changed(id) => { root.on_scope_changed(id); }
+                        sort_changed(crit, asc) => { root.on_sort_changed(crit, asc); }
                         add_folder_clicked => { root.on_add_folder_clicked(); }
                     }
 
