@@ -308,11 +308,12 @@ export component QueueView inherits Rectangle {
         padding-right: 24px;
         padding-top: 14px;
         padding-bottom: 16px;
-        spacing: 14px;
+        spacing: 12px;
 
         // Top Header with Title, Reshuffle Button, and Clear Button
         HorizontalLayout {
             height: 38px;
+            vertical-stretch: 0;
             alignment: space-between;
 
             HorizontalLayout {
@@ -418,7 +419,6 @@ export component QueueView inherits Rectangle {
             border-radius: 14px;
             border-width: 1px;
             border-color: ThemePalette.border_subtle;
-            vertical-stretch: 1;
 
             VerticalLayout {
                 alignment: center;
@@ -460,6 +460,7 @@ export component QueueView inherits Rectangle {
 
         // Active Queue: SECTION 1 - PINNED NOW PLAYING CARD
         if root.queue_items.length > 0 && root.active_index >= 0 && root.active_index < root.queue_items.length : VerticalLayout {
+            vertical-stretch: 0;
             spacing: 6px;
 
             HorizontalLayout {
@@ -650,7 +651,7 @@ export component QueueView inherits Rectangle {
                 for track[index] in root.queue_items : VerticalLayout {
                     // Filter out the pinned current track
                     if index != root.active_index : VerticalLayout {
-                        padding-bottom: 4px;
+                        padding-bottom: 6px;
 
                         QueueRow {
                             track: track;
@@ -680,6 +681,11 @@ export component QueueView inherits Rectangle {
                     }
                 }
             }
+        }
+
+        // Bottom spacer to consume any extra space if list is short
+        Rectangle {
+            vertical-stretch: 0;
         }
     }
 }
