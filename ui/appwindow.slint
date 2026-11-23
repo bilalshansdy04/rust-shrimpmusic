@@ -69,6 +69,8 @@ export component AppWindow inherits Window {
 
     in property <[FolderEntryModel]> settings_folders: [];
     in property <[OutputDeviceModel]> settings_devices: [];
+    in property <bool> can_enable_exclusive: false;
+    in property <string> exclusive_hint: "";
 
     in property <bool> is_safety_modal_visible: false;
     in property <bool> is_testing_audio: false;
@@ -393,6 +395,8 @@ export component AppWindow inherits Window {
             folders: root.settings_folders;
             devices: root.settings_devices;
             is_exclusive: root.is_exclusive;
+            can_enable_exclusive: root.can_enable_exclusive;
+            exclusive_hint: root.exclusive_hint;
             is_dark: ThemePalette.is_dark;
             shuffle_style: root.shuffle_style;
             is_eq_enabled: root.is_eq_enabled;

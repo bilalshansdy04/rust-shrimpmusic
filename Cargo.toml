@@ -35,6 +35,8 @@ symphonia = { version = "0.6.1", features = ["flac", "aac", "mp3", "alac", "isom
 thiserror = "2.0.21"
 walkdir = "2.5.0"
 wasapi = "0.27.0"
+muda = "0.21.2"
+tray-icon = "0.26.1"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [

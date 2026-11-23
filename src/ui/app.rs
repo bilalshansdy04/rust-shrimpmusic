@@ -16,6 +16,7 @@ use crate::library::scanner::{ScanProgress, Scanner};
 use crate::library::playlist::PlaylistManager;
 use crate::library::search::SearchEngine;
 use super::taskbar::TaskbarController;
+use super::tray::{TrayAction, TrayController};
 
 slint::include_modules!();
 
@@ -25,6 +26,7 @@ pub struct ShrimpMusicApp {
     player: Rc<AudioPlayer>,
     queue: Rc<RefCell<PlaybackQueue>>,
     taskbar: Rc<RefCell<TaskbarController>>,
+    tray: Rc<RefCell<Option<TrayController>>>,
     active_scope: Cell<Option<i64>>,
     sort_criteria: Cell<SortCriteria>,
     sort_ascending: Cell<bool>,
@@ -114,12 +116,19 @@ impl ShrimpMusicApp {
         let win_volume = crate::audio::WindowsVolumeController::new();
         window.set_windows_master_volume(win_volume.get_volume());
 
+        let tray = Rc::new(RefCell::new(
+            TrayController::new("assets/logo_small.png")
+                .or_else(|_| TrayController::new("assets/logo.png"))
+                .ok(),
+        ));
+
         let app = Self {
             window,
             db,
             player,
             queue,
             taskbar,
+            tray,
             active_scope: Cell::new(None),
             sort_criteria: Cell::new(SortCriteria::Title),
             sort_ascending: Cell::new(true),
@@ -143,17 +152,53 @@ impl ShrimpMusicApp {
     }
 
     fn refresh_devices(&self) {
+        Self::update_devices_in_ui(&self.window, None);
+    }
+
+    fn update_devices_in_ui(window: &AppWindow, selected_id: Option<&str>) {
         if let Ok(devices) = DeviceManager::list_output_devices_isolated() {
+            let mut can_enable_exclusive = false;
+            let mut current_selected_device_name = String::new();
+
+            // Check which device is currently active/selected
+            let target_id = selected_id.map(|s| s.to_string());
             let models: Vec<OutputDeviceModel> = devices
                 .into_iter()
-                .map(|d| OutputDeviceModel {
-                    id: SharedString::from(d.id),
-                    name: SharedString::from(d.name),
-                    is_default: d.is_default,
-                    is_selected: d.is_default,
+                .map(|d| {
+                    let is_sel = match &target_id {
+                        Some(sel) => d.id == *sel,
+                        None => d.is_default,
+                    };
+                    if is_sel {
+                        current_selected_device_name = d.name.clone();
+                        can_enable_exclusive = d.supports_bit_perfect;
+                    }
+                    OutputDeviceModel {
+                        id: SharedString::from(d.id),
+                        name: SharedString::from(d.name),
+                        is_default: d.is_default,
+                        is_selected: is_sel,
+                        badge: SharedString::from(d.classification.display_badge()),
+                        supports_bit_perfect: d.supports_bit_perfect,
+                    }
                 })
                 .collect();
-            self.window.set_settings_devices(ModelRc::new(VecModel::from(models)));
+
+            let hint = if can_enable_exclusive {
+                SharedString::from("Perangkat mendukung bit-perfect WASAPI Exclusive.")
+            } else {
+                SharedString::from("Bit-Perfect nonaktif: Hanya didukung pada USB DAC / Type-C DAC eksternal.")
+            };
+
+            window.set_can_enable_exclusive(can_enable_exclusive);
+            window.set_exclusive_hint(hint);
+
+            // If current device does not support bit-perfect, force disable exclusive mode
+            if !can_enable_exclusive && window.get_is_exclusive() {
+                window.set_is_exclusive(false);
+            }
+
+            window.set_settings_devices(ModelRc::new(VecModel::from(models)));
         }
     }
 
@@ -653,14 +698,16 @@ impl ShrimpMusicApp {
         let w15 = win_weak.clone();
         self.window.on_on_window_close(move || {
             if let Some(w) = w15.upgrade() {
-                w.window().set_minimized(true);
+                // Sembunyikan window dari layar dan taskbar ke Windows System Tray
+                let _ = w.window().with_winit_window(|win| {
+                    win.set_visible(false);
+                });
             }
         });
 
         let w_drag = win_weak.clone();
         self.window.on_on_window_drag(move || {
             if let Some(w) = w_drag.upgrade() {
-                println!("[DEBUG UI] on_window_drag triggered");
                 let _ = w.window().with_winit_window(|win| {
                     let _ = win.drag_window();
                 });
@@ -671,13 +718,29 @@ impl ShrimpMusicApp {
         let p16 = player.clone();
         let w16 = win_weak.clone();
         self.window.on_on_toggle_exclusive(move |en| {
-            let _ = p16.set_exclusive(en);
             if let Some(w) = w16.upgrade() {
+                // Jangan izinkan aktif jika device tidak mendukung bit-perfect
+                if en && !w.get_can_enable_exclusive() {
+                    w.set_is_exclusive(false);
+                    return;
+                }
+                let _ = p16.set_exclusive(en);
                 w.set_is_exclusive(en);
                 // Jika user mengaktifkan Exclusive dan EQ sedang nyala, tampilkan rekomendasi popup
                 if en && w.get_is_eq_enabled() {
                     w.set_is_audiophile_modal_visible(true);
                 }
+            }
+        });
+
+        // 13b. Select Audio Output Device
+        let w_sel_dev = win_weak.clone();
+        let p_sel_dev = player.clone();
+        self.window.on_on_select_device(move |dev_id| {
+            let id_str = dev_id.to_string();
+            let _ = p_sel_dev.set_device(Some(id_str.clone()));
+            if let Some(w) = w_sel_dev.upgrade() {
+                Self::update_devices_in_ui(&w, Some(&id_str));
             }
         });
 
@@ -1162,6 +1225,7 @@ impl ShrimpMusicApp {
         let q_ref = self.queue.clone();
         let db = self.db.clone();
         let taskbar = self.taskbar.clone();
+        let tray = self.tray.clone();
         let last_scroll = self.last_lyrics_scroll_time.clone();
         let vol_ctrl = self.win_volume.clone();
 
@@ -1170,6 +1234,31 @@ impl ShrimpMusicApp {
             Duration::from_millis(50),
             move || {
                 let Some(w) = win_weak.upgrade() else { return };
+
+                // -1. Poll Windows System Tray Events
+                if let Some(tray_ctrl) = tray.borrow().as_ref() {
+                    while let Some(action) = tray_ctrl.poll_events() {
+                        match action {
+                            TrayAction::ShowWindow => {
+                                let _ = w.window().with_winit_window(|win| {
+                                    win.set_visible(true);
+                                    win.set_minimized(false);
+                                    let _ = win.focus_window();
+                                });
+                            }
+                            TrayAction::TogglePlayPause => {
+                                if w.get_is_playing() {
+                                    let _ = player.pause();
+                                } else {
+                                    let _ = player.resume();
+                                }
+                            }
+                            TrayAction::ExitApp => {
+                                std::process::exit(0);
+                            }
+                        }
+                    }
+                }
 
                 // 0. Continuous Windows Master Volume Sync for Hearing Safety Modal
                 if w.get_is_safety_modal_visible() {

@@ -63,6 +63,36 @@ fn test_device_enumeration() {
 }
 
 #[test]
+fn test_device_classification_and_bit_perfect_support() {
+    use shrimp_music::audio::device::{AudioDeviceInfo, DeviceClassification};
+
+    // Test Type-C DAC converter with chip
+    let (c1, sup1) = AudioDeviceInfo::classify("Headphones (JadeAudio JA11)", r"USB\VID_2972&PID_0055\000000000001");
+    assert_eq!(c1, DeviceClassification::TypeCDacConverter);
+    assert!(sup1);
+
+    // Test CX31993 Type-C DAC dongle
+    let (c2, sup2) = AudioDeviceInfo::classify("Conexant CX31993 HiFi Audio", r"USB\VID_1F3A&PID_1001");
+    assert_eq!(c2, DeviceClassification::TypeCDacConverter);
+    assert!(sup2);
+
+    // Test Dedicated USB DAC
+    let (c3, sup3) = AudioDeviceInfo::classify("FiiO Q3 USB DAC", r"USB\VID_2972&PID_0044");
+    assert_eq!(c3, DeviceClassification::UsbDac);
+    assert!(sup3);
+
+    // Test Onboard Realtek Speakers
+    let (c4, sup4) = AudioDeviceInfo::classify("Speakers (Realtek(R) Audio)", r"INTELAUDIO\FUNC_01&VEN_10EC");
+    assert_eq!(c4, DeviceClassification::InternalSpeakers);
+    assert!(!sup4, "Internal speakers should not support bit-perfect exclusive mode");
+
+    // Test Virtual audio enhancer
+    let (c5, sup5) = AudioDeviceInfo::classify("FxSound Speakers (FxSound Audio Enhancer)", r"ROOT\MEDIA\0000");
+    assert_eq!(c5, DeviceClassification::VirtualAudio);
+    assert!(!sup5, "Virtual audio should not support bit-perfect exclusive mode");
+}
+
+#[test]
 fn test_decoder_seek() {
     let flac_path = std::path::Path::new(r"D:\Lossless Music\01 - Love Me Back.flac");
     if flac_path.exists() {

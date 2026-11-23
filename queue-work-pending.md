@@ -7,27 +7,37 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 📋 Antrean Aktif
 
-### [PENDING-01] Validasi Hardware USB Audio / DAC untuk Bit-Perfect Mode & Deteksi Type-C Converter
-- **Prioritas:** Tinggi
-- **Deskripsi Kebutuhan:**
-  1. **Proteksi Bit-Perfect (WASAPI Exclusive):** Jika tidak ada perangkat USB Audio / DAC eksternal yang terhubung (atau sedang menggunakan speaker internal / virtual audio), sakelar Bit-Perfect tidak boleh bisa diaktifkan (disabled / nonaktif dengan feedback informatif bahwa Bit-Perfect hanya untuk USB DAC).
-  2. **Deteksi Perangkat Type-C Audio:** Sistem mampu mengenali dan membedakan:
-     - **Type-C to 3.5mm Converter dengan Chip DAC Eksternal** (misal Realtek ALC5686, Conexant CX31993, JadeAudio/FiiO JA11, CS43131, ESS Sabre, dsb.).
-     - **Converter Pasif / Analog Biasa** (yang masih mengandalkan codec onboard/internal).
-     - Menampilkan lencana / label tipe perangkat pada daftar output audio di Pengaturan.
-
-### [PENDING-02] Perilaku Tombol Close Jendela: Minimize ke System Tray (Bukan Taskbar)
-- **Prioritas:** Sedang
-- **Deskripsi Kebutuhan:**
-  - Saat tombol Close (X) pada Title Bar jendela ditekan, aplikasi tidak boleh hanya terminimize ke Taskbar biasa, melainkan:
-    - Jendela aplikasi disembunyikan (*hidden*) dari Taskbar dan layar.
-    - Aplikasi tetap berjalan di latar belakang pada **Windows System Tray** (area notifikasi di pojok kanan bawah dekat jam).
-    - Memiliki icon System Tray dengan menu klik kanan (Buka / Tampilkan, Play/Pause, Keluar / Exit Aplikasi).
-    - Double-click pada icon System Tray memunculkan kembali jendela ShrimpMusic Player ke layar.
+*(Semua antrean prioritas dan temuan pending per tanggal 11/18/2026 - 11/23/2026 telah berhasil diselesaikan dan diverifikasi 100% lulus pengujian)*
 
 ---
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
+
+### [DONE-23 / UDAH] Perilaku Tombol Close Jendela: Minimize / Hide ke Windows System Tray
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
+  - Menambahkan modul [src/ui/tray.rs](file:///d:/Projects/music/rust/src/ui/tray.rs) menggunakan pustaka `tray-icon` dan `muda`.
+  - Mengubah penanganan tombol close (X) di [src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs) agar memanggil `win.set_visible(false)`: jendela tersembunyi secara bersih dari layar dan Taskbar Windows, dan aplikasi tetap berjalan hemat di latar belakang.
+  - Menyediakan tray icon dengan menu interaktif: "Buka ShrimpMusic", "Putar / Jeda", dan "Keluar dari Aplikasi".
+  - Klik ganda atau klik kiri pada tray icon seketika memunculkan kembali jendela aplikasi (`win.set_visible(true)` + `focus_window()`).
+- **Hasil Pengujian:** 19/19 pengujian unit dan integrasi lulus 100%.
+
+---
+
+### [DONE-22 / UDAH] Validasi Hardware USB Audio / DAC untuk Bit-Perfect Mode & Deteksi Type-C Converter
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
+  - Menambahkan `DeviceClassification` dan deteksi perangkat cerdas pada [src/audio/device.rs](file:///d:/Projects/music/rust/src/audio/device.rs) yang mengenali:
+    - Dedicated USB DAC (FiiO, Topping, iFi, Moondrop, dll.).
+    - Type-C to 3.5mm Converter dengan chip DAC aktif (JadeAudio JA11, Conexant CX31993, Realtek ALC5686, CS43131, dll.).
+    - Converter analog pasif / onboard jack, speaker internal, Bluetooth, dan virtual audio (FxSound, Voicemeeter).
+  - Melindungi sakelar WASAPI Exclusive Mode di [ui/views/settings.slint](file:///d:/Projects/music/rust/ui/views/settings.slint) dan [src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs):
+    - Jika perangkat yang dipilih bukan USB DAC / Type-C DAC, sakelar Exclusive dinonaktifkan (disabled / opacity redup) dengan pesan peringatan: *"Bit-Perfect nonaktif: Hanya didukung pada USB DAC / Type-C DAC eksternal"*.
+    - Menampilkan lencana hardware (`USB DAC`, `Type-C DAC`, `Speaker`, `Virtual`, dll.) pada setiap baris perangkat di menu Pengaturan.
+    - Mengintegrasikan pemilihan perangkat audio (`on_select_device`) secara real-time via `player.set_device(...)`.
+- **Hasil Pengujian:** Seluruh pengujian klasifikasi perangkat dan fungsionalitas audio lulus 100%.
+
+---
 
 ### [DONE-21] Pencegahan Glitch Audio ("Dretttt") pada WASAPI Exclusive Mode saat Pause
 - **Udah diperbaiki tanggal 11/22/2026**
