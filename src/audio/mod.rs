@@ -8,9 +8,11 @@ pub mod safety;
 pub mod wasapi_engine;
 pub mod waveform;
 pub mod windows_volume;
+pub mod device_watcher;
 
 pub use decoder::{SymphoniaDecoder, SymphoniaDecoder as AudioDecoder, TrackAudioSpec};
-pub use device::{AudioDeviceInfo, DeviceManager};
+pub use device::{AudioDeviceInfo, DeviceClassification, DeviceManager};
+pub use device_watcher::DeviceWatcher;
 pub use dsp::{
     convert_f32_to_bytes, DspProcessor, EqPreset, Equalizer10Band, TargetSampleFormat,
     VolumeBalanceMode, EQ_FREQUENCIES,

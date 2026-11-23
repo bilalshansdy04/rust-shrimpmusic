@@ -6,7 +6,7 @@ use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use i_slint_backend_winit::WinitWindowAccessor;
 
 use crate::audio::{
-    AudioEvent, AudioPlayer, DeviceManager, LoopMode, PlaybackQueue, PlayerState,
+    AudioDeviceInfo, AudioEvent, AudioPlayer, DeviceManager, LoopMode, PlaybackQueue, PlayerState,
     ShuffleStyle,
 };
 use crate::audio::dsp::{EqPreset, VolumeBalanceMode};
@@ -33,6 +33,7 @@ pub struct ShrimpMusicApp {
     last_lyrics_scroll_time: Rc<Cell<Option<Instant>>>,
     _timer: slint::Timer,
     win_volume: crate::audio::WindowsVolumeController,
+    device_watcher: crate::audio::DeviceWatcher,
 }
 
 impl ShrimpMusicApp {
@@ -115,6 +116,7 @@ impl ShrimpMusicApp {
         let timer = slint::Timer::default();
         let win_volume = crate::audio::WindowsVolumeController::new();
         window.set_windows_master_volume(win_volume.get_volume());
+        let device_watcher = crate::audio::DeviceWatcher::new();
 
         let tray = Rc::new(RefCell::new(
             TrayController::new("assets/logo_small.png")
@@ -135,6 +137,7 @@ impl ShrimpMusicApp {
             last_lyrics_scroll_time,
             _timer: timer,
             win_volume,
+            device_watcher,
         };
 
         app.refresh_devices();
@@ -155,50 +158,52 @@ impl ShrimpMusicApp {
         Self::update_devices_in_ui(&self.window, None);
     }
 
+    fn apply_device_models_to_ui(window: &AppWindow, devices: Vec<AudioDeviceInfo>, selected_id: Option<&str>) {
+        let mut can_enable_exclusive = false;
+
+        // Check which device is currently active/selected
+        let target_id = selected_id.map(|s| s.to_string());
+        let models: Vec<OutputDeviceModel> = devices
+            .into_iter()
+            .map(|d| {
+                let is_sel = match &target_id {
+                    Some(sel) => d.id == *sel,
+                    None => d.is_default,
+                };
+                if is_sel {
+                    can_enable_exclusive = d.supports_bit_perfect;
+                }
+                OutputDeviceModel {
+                    id: SharedString::from(d.id),
+                    name: SharedString::from(d.name),
+                    is_default: d.is_default,
+                    is_selected: is_sel,
+                    badge: SharedString::from(d.classification.display_badge()),
+                    supports_bit_perfect: d.supports_bit_perfect,
+                }
+            })
+            .collect();
+
+        let hint = if can_enable_exclusive {
+            SharedString::from("Perangkat mendukung bit-perfect WASAPI Exclusive.")
+        } else {
+            SharedString::from("Bit-Perfect nonaktif: Hanya didukung pada USB DAC / Type-C DAC eksternal.")
+        };
+
+        window.set_can_enable_exclusive(can_enable_exclusive);
+        window.set_exclusive_hint(hint);
+
+        // If current device does not support bit-perfect, force disable exclusive mode
+        if !can_enable_exclusive && window.get_is_exclusive() {
+            window.set_is_exclusive(false);
+        }
+
+        window.set_settings_devices(ModelRc::new(VecModel::from(models)));
+    }
+
     fn update_devices_in_ui(window: &AppWindow, selected_id: Option<&str>) {
         if let Ok(devices) = DeviceManager::list_output_devices_isolated() {
-            let mut can_enable_exclusive = false;
-            let mut current_selected_device_name = String::new();
-
-            // Check which device is currently active/selected
-            let target_id = selected_id.map(|s| s.to_string());
-            let models: Vec<OutputDeviceModel> = devices
-                .into_iter()
-                .map(|d| {
-                    let is_sel = match &target_id {
-                        Some(sel) => d.id == *sel,
-                        None => d.is_default,
-                    };
-                    if is_sel {
-                        current_selected_device_name = d.name.clone();
-                        can_enable_exclusive = d.supports_bit_perfect;
-                    }
-                    OutputDeviceModel {
-                        id: SharedString::from(d.id),
-                        name: SharedString::from(d.name),
-                        is_default: d.is_default,
-                        is_selected: is_sel,
-                        badge: SharedString::from(d.classification.display_badge()),
-                        supports_bit_perfect: d.supports_bit_perfect,
-                    }
-                })
-                .collect();
-
-            let hint = if can_enable_exclusive {
-                SharedString::from("Perangkat mendukung bit-perfect WASAPI Exclusive.")
-            } else {
-                SharedString::from("Bit-Perfect nonaktif: Hanya didukung pada USB DAC / Type-C DAC eksternal.")
-            };
-
-            window.set_can_enable_exclusive(can_enable_exclusive);
-            window.set_exclusive_hint(hint);
-
-            // If current device does not support bit-perfect, force disable exclusive mode
-            if !can_enable_exclusive && window.get_is_exclusive() {
-                window.set_is_exclusive(false);
-            }
-
-            window.set_settings_devices(ModelRc::new(VecModel::from(models)));
+            Self::apply_device_models_to_ui(window, devices, selected_id);
         }
     }
 
@@ -1228,12 +1233,18 @@ impl ShrimpMusicApp {
         let tray = self.tray.clone();
         let last_scroll = self.last_lyrics_scroll_time.clone();
         let vol_ctrl = self.win_volume.clone();
+        let dev_watcher = self.device_watcher.clone();
 
         self._timer.start(
             slint::TimerMode::Repeated,
             Duration::from_millis(50),
             move || {
                 let Some(w) = win_weak.upgrade() else { return };
+
+                // -2. Real-Time Audio Device Hotplug Monitoring (USB DAC / Type-C converter plug/unplug)
+                if let Some(devs) = dev_watcher.poll_devices_changed() {
+                    Self::apply_device_models_to_ui(&w, devs, None);
+                }
 
                 // -1. Poll Windows System Tray Events
                 if let Some(tray_ctrl) = tray.borrow().as_ref() {

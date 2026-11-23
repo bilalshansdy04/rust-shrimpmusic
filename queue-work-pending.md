@@ -13,6 +13,18 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
 
+### [DONE-24 / UDAH] Pemantauan Real-Time Pasang/Cabut (Hotplug) USB DAC & Type-C Converter
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
+  - Menambahkan modul background worker thread [src/audio/device_watcher.rs](file:///d:/Projects/music/rust/src/audio/device_watcher.rs) (`DeviceWatcher`) yang secara periodik memantau perubahan perangkat audio Windows secara real-time tanpa mengganggu thread UI utama.
+  - Mengintegrasikan sinyal perubahan perangkat audio ke event loop utama di [src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs):
+    - Ketika USB DAC atau Converter Type-C dicolokkan ke laptop/PC saat aplikasi sedang terbuka, daftar perangkat di menu Pengaturan seketika diperbarui tanpa perlu restart aplikasi.
+    - Status sakelar Bit-Perfect langsung terbuka (enabled) dan dapat diaktifkan.
+    - Sebaliknya, jika DAC dicabut, sakelar otomatis terkunci kembali ke mode proteksi aman.
+- **Hasil Pengujian:** 19/19 pengujian unit dan integrasi lulus 100%.
+
+---
+
 ### [DONE-23 / UDAH] Perilaku Tombol Close Jendela: Minimize / Hide ke Windows System Tray
 - **Udah diperbaiki tanggal 11/23/2026**
 - **Detail Implementasi:**
