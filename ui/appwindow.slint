@@ -99,6 +99,9 @@ export component AppWindow inherits Window {
     callback on_add_folder_clicked();
 
     callback on_play_queue_item(int);
+    callback on_remove_queue_item(int);
+    callback on_move_queue_item(int, int);
+    callback on_reshuffle_queue();
     callback on_clear_queue();
 
     callback on_create_playlist(string);
@@ -367,8 +370,13 @@ export component AppWindow inherits Window {
                     if root.active_view == 3 : QueueView {
                         queue_items: root.queue_items;
                         active_index: root.active_queue_index;
+                        is_shuffle: root.is_shuffle;
+                        is_playing: root.is_playing;
 
                         play_queue_item(idx) => { root.on_play_queue_item(idx); }
+                        remove_queue_item(idx) => { root.on_remove_queue_item(idx); }
+                        move_queue_item(from, to) => { root.on_move_queue_item(from, to); }
+                        reshuffle_queue => { root.on_reshuffle_queue(); }
                         clear_queue => { root.on_clear_queue(); }
                     }
                 }

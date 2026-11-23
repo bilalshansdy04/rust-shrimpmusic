@@ -3,11 +3,302 @@ import { ListView } from "std-widgets.slint";
 import { TrackItemModel } from "library.slint";
 import { IconDisplay, IconSet } from "@lucide";
 
+export component QueueRow inherits Rectangle {
+    in property <TrackItemModel> track;
+    in property <int> queue_index: 0;
+    in property <int> display_number: 1;
+    in property <bool> is_first: false;
+    in property <bool> is_last: false;
+
+    callback play_item();
+    callback remove_item();
+    callback move_up();
+    callback move_down();
+
+    private property <length> swipe_offset_x: 0px;
+    private property <bool> is_swiping: false;
+
+    height: 52px;
+    clip: true;
+    background: transparent;
+
+    // Background swipe-to-delete indicators (Left and Right)
+    if root.swipe_offset_x != 0px : Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: 8px;
+        background: #dc262622;
+        border-width: 1px;
+        border-color: #dc262666;
+
+        // Trash icon on the left (if swiping right)
+        if root.swipe_offset_x > 0px : Rectangle {
+            x: 14px;
+            width: 24px;
+            height: parent.height;
+
+            IconDisplay {
+                icon: IconSet.Trash2;
+                size: 16px;
+                stroke: #ef4444;
+                stroke-width: 2.0;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        // Trash icon on the right (if swiping left)
+        if root.swipe_offset_x < 0px : Rectangle {
+            x: parent.width - self.width - 14px;
+            width: 24px;
+            height: parent.height;
+
+            IconDisplay {
+                icon: IconSet.Trash2;
+                size: 16px;
+                stroke: #ef4444;
+                stroke-width: 2.0;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+    }
+
+    // Main Track Card Content (moves with swipe_offset_x)
+    content := Rectangle {
+        x: root.swipe_offset_x;
+        width: 100%;
+        height: 100%;
+        background: item_touch.has-hover ? ThemePalette.bg_hover : ThemePalette.bg_surface;
+        border-radius: 8px;
+        border-width: 1px;
+        border-color: item_touch.has-hover ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+
+        animate x { duration: 180ms; easing: ease-out; }
+
+        // Col 1: Display Number (Upcoming position)
+        Rectangle {
+            x: 10px;
+            y: 0px;
+            width: 24px;
+            height: parent.height;
+
+            Text {
+                text: root.display_number + "";
+                font-size: 11px;
+                font-weight: 600;
+                color: ThemePalette.text_muted;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: 100%;
+                height: 100%;
+            }
+        }
+
+        // Col 2: Title & Artist
+        VerticalLayout {
+            x: 40px;
+            y: 0px;
+            width: Math.max(120px, (parent.width - 290px) * 0.50);
+            height: parent.height;
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.track.title;
+                font-size: 13px;
+                font-weight: 500;
+                color: ThemePalette.text_primary;
+                overflow: elide;
+            }
+
+            Text {
+                text: root.track.artist;
+                font-size: 11px;
+                color: ThemePalette.text_secondary;
+                overflow: elide;
+            }
+        }
+
+        // Col 3: Album
+        VerticalLayout {
+            x: 40px + Math.max(120px, (parent.width - 290px) * 0.50) + 12px;
+            y: 0px;
+            width: Math.max(70px, (parent.width - 220px) - self.x);
+            height: parent.height;
+            alignment: center;
+
+            Text {
+                text: root.track.album;
+                font-size: 12px;
+                color: ThemePalette.text_secondary;
+                overflow: elide;
+            }
+        }
+
+        // Col 4: Hi-Res Badge slot (Strict fixed position x: parent.width - 195px)
+        Rectangle {
+            x: parent.width - 195px;
+            y: (parent.height - self.height) / 2;
+            width: 44px;
+            height: 18px;
+
+            if root.track.is_hi_res : Rectangle {
+                width: 42px;
+                height: 18px;
+                border-radius: 4px;
+                background: ThemePalette.accent_subtle;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+
+                Text {
+                    text: "Hi-Res";
+                    font-size: 9px;
+                    font-weight: 700;
+                    color: ThemePalette.accent_primary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        // Col 5: Duration (Strict fixed position x: parent.width - 145px)
+        Rectangle {
+            x: parent.width - 145px;
+            y: 0px;
+            width: 42px;
+            height: parent.height;
+
+            Text {
+                text: root.track.duration_str;
+                font-size: 11px;
+                font-weight: 500;
+                color: ThemePalette.text_muted;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+                width: 100%;
+                height: 100%;
+            }
+        }
+
+        // Col 6: Reorder & Remove Action Buttons (Right-pinned controls)
+        HorizontalLayout {
+            x: parent.width - 96px;
+            y: (parent.height - self.height) / 2;
+            height: 28px;
+            spacing: 4px;
+
+            // Move Up Button
+            Rectangle {
+                width: 26px;
+                height: 26px;
+                border-radius: 6px;
+                background: up_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+                opacity: root.is_first ? 0.3 : 1.0;
+
+                IconDisplay {
+                    icon: IconSet.ChevronUp;
+                    size: 14px;
+                    stroke: ThemePalette.text_secondary;
+                    stroke-width: 2.0;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                up_touch := TouchArea {
+                    enabled: !root.is_first;
+                    clicked => { root.move_up(); }
+                }
+            }
+
+            // Move Down Button
+            Rectangle {
+                width: 26px;
+                height: 26px;
+                border-radius: 6px;
+                background: down_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+                opacity: root.is_last ? 0.3 : 1.0;
+
+                IconDisplay {
+                    icon: IconSet.ChevronDown;
+                    size: 14px;
+                    stroke: ThemePalette.text_secondary;
+                    stroke-width: 2.0;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                down_touch := TouchArea {
+                    enabled: !root.is_last;
+                    clicked => { root.move_down(); }
+                }
+            }
+
+            // Quick Delete Button (or use swipe)
+            Rectangle {
+                width: 26px;
+                height: 26px;
+                border-radius: 6px;
+                background: del_touch.has-hover ? #dc262622 : transparent;
+
+                IconDisplay {
+                    icon: IconSet.X;
+                    size: 13px;
+                    stroke: del_touch.has-hover ? #ef4444 : ThemePalette.text_muted;
+                    stroke-width: 2.0;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                del_touch := TouchArea {
+                    clicked => { root.remove_item(); }
+                }
+            }
+        }
+
+        // Swipe & Click Area
+        item_touch := TouchArea {
+            x: 0px;
+            y: 0px;
+            width: parent.width - 100px; // Leave action buttons unblocked
+            height: parent.height;
+
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    root.is_swiping = true;
+                } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                    root.is_swiping = false;
+                    // If swiped beyond 90px left or right, trigger delete
+                    if root.swipe_offset_x > 90px || root.swipe_offset_x < -90px {
+                        root.remove_item();
+                    } else {
+                        root.swipe_offset_x = 0px;
+                    }
+                }
+            }
+
+            moved => {
+                if self.pressed {
+                    // Update swipe offset with resistance clamp
+                    root.swipe_offset_x = Math.max(-140px, Math.min(140px, self.mouse-x - self.pressed-x));
+                }
+            }
+
+            double-clicked => {
+                root.play_item();
+            }
+        }
+    }
+}
+
 export component QueueView inherits Rectangle {
     in property <[TrackItemModel]> queue_items: [];
     in property <int> active_index: 0;
+    in property <bool> is_shuffle: false;
+    in property <bool> is_playing: false;
 
     callback play_queue_item(int);
+    callback remove_queue_item(int);
+    callback move_queue_item(int, int);
+    callback reshuffle_queue();
     callback clear_queue();
 
     background: transparent;
@@ -17,9 +308,9 @@ export component QueueView inherits Rectangle {
         padding-right: 24px;
         padding-top: 14px;
         padding-bottom: 16px;
-        spacing: 12px;
+        spacing: 14px;
 
-        // Header
+        // Top Header with Title, Reshuffle Button, and Clear Button
         HorizontalLayout {
             height: 38px;
             alignment: space-between;
@@ -45,38 +336,78 @@ export component QueueView inherits Rectangle {
                 }
             }
 
-            if root.queue_items.length > 0 : Rectangle {
-                height: 28px;
-                border-radius: 14px;
-                background: clear_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
-                border-width: 1px;
-                border-color: ThemePalette.border_subtle;
-                y: (parent.height - self.height) / 2;
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: center;
 
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    spacing: 6px;
+                // [ 🔀 Acak Ulang Antrean ] Reshuffle Button
+                if root.queue_items.length > 2 : Rectangle {
+                    height: 28px;
+                    border-radius: 14px;
+                    background: reshuf_touch.has-hover ? ThemePalette.accent_subtle : ThemePalette.bg_surface;
+                    border-width: 1px;
+                    border-color: reshuf_touch.has-hover ? ThemePalette.accent_primary : ThemePalette.border_subtle;
 
-                    IconDisplay {
-                        icon: IconSet.X;
-                        size: 12px;
-                        stroke: ThemePalette.text_secondary;
-                        stroke-width: 2.0;
-                        y: (parent.height - self.height) / 2;
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 6px;
+
+                        IconDisplay {
+                            icon: IconSet.Shuffle;
+                            size: 13px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.0;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        Text {
+                            text: "Acak Ulang Antrean";
+                            font-size: 11px;
+                            font-weight: 600;
+                            color: ThemePalette.accent_primary;
+                            vertical-alignment: center;
+                        }
                     }
 
-                    Text {
-                        text: "Kosongkan";
-                        font-size: 11px;
-                        font-weight: 600;
-                        color: ThemePalette.text_secondary;
-                        vertical-alignment: center;
+                    reshuf_touch := TouchArea {
+                        clicked => { root.reshuffle_queue(); }
                     }
                 }
 
-                clear_touch := TouchArea {
-                    clicked => { root.clear_queue(); }
+                // Kosongkan Antrean Button
+                if root.queue_items.length > 0 : Rectangle {
+                    height: 28px;
+                    border-radius: 14px;
+                    background: clear_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
+                    border-width: 1px;
+                    border-color: ThemePalette.border_subtle;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 6px;
+
+                        IconDisplay {
+                            icon: IconSet.X;
+                            size: 12px;
+                            stroke: ThemePalette.text_secondary;
+                            stroke-width: 2.0;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        Text {
+                            text: "Kosongkan";
+                            font-size: 11px;
+                            font-weight: 600;
+                            color: ThemePalette.text_secondary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    clear_touch := TouchArea {
+                        clicked => { root.clear_queue(); }
+                    }
                 }
             }
         }
@@ -87,6 +418,7 @@ export component QueueView inherits Rectangle {
             border-radius: 14px;
             border-width: 1px;
             border-color: ThemePalette.border_subtle;
+            vertical-stretch: 1;
 
             VerticalLayout {
                 alignment: center;
@@ -126,93 +458,129 @@ export component QueueView inherits Rectangle {
             }
         }
 
-        // Queue Items List (Laser-straight column alignment)
-        if root.queue_items.length > 0 : ListView {
-            for track[index] in root.queue_items : Rectangle {
-                height: 50px;
-                background: index == root.active_index ? ThemePalette.bg_elevated :
-                           (item_touch.has-hover ? ThemePalette.bg_hover : transparent);
-                border-radius: 8px;
+        // Active Queue: SECTION 1 - PINNED NOW PLAYING CARD
+        if root.queue_items.length > 0 && root.active_index >= 0 && root.active_index < root.queue_items.length : VerticalLayout {
+            spacing: 6px;
 
-                // Col 1: Play indicator or index (Fixed position x: 10px)
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+
+                Text {
+                    text: "SEDANG DIPUTAR";
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                    color: ThemePalette.accent_primary;
+                    vertical-alignment: center;
+                }
+
+                if root.is_shuffle : Rectangle {
+                    height: 16px;
+                    border-radius: 4px;
+                    background: ThemePalette.accent_subtle;
+
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        spacing: 3px;
+
+                        IconDisplay {
+                            icon: IconSet.Shuffle;
+                            size: 9px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.0;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        Text {
+                            text: "Shuffle Aktif";
+                            font-size: 9px;
+                            font-weight: 700;
+                            color: ThemePalette.accent_primary;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // Glowing Pinned Card for Currently Playing Track
+            Rectangle {
+                height: 56px;
+                border-radius: 10px;
+                background: ThemePalette.bg_elevated;
+                border-width: 1.5px;
+                border-color: ThemePalette.accent_primary;
+
+                // Col 1: Play Animation / Icon indicator
                 Rectangle {
-                    x: 10px;
+                    x: 12px;
                     y: 0px;
                     width: 24px;
                     height: parent.height;
 
-                    if index == root.active_index : IconDisplay {
-                        icon: IconSet.Play;
-                        size: 13px;
+                    IconDisplay {
+                        icon: root.is_playing ? IconSet.Play : IconSet.Pause;
+                        size: 15px;
                         stroke: ThemePalette.accent_primary;
                         stroke-fill: ThemePalette.accent_primary;
                         stroke-width: 2.0;
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
                     }
-
-                    if index != root.active_index : Text {
-                        text: (index + 1) + "";
-                        font-size: 11px;
-                        font-weight: 500;
-                        color: ThemePalette.text_muted;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                        width: 100%;
-                        height: 100%;
-                    }
                 }
 
-                // Col 2: Title & Artist (Strict fixed start at x: 42px, proportional width)
+                // Col 2: Title & Artist
                 VerticalLayout {
-                    x: 42px;
+                    x: 44px;
                     y: 0px;
-                    width: Math.max(130px, (parent.width - 240px) * 0.50);
+                    width: Math.max(130px, (parent.width - 250px) * 0.50);
                     height: parent.height;
                     alignment: center;
                     spacing: 2px;
 
                     Text {
-                        text: track.title;
-                        font-size: 13px;
-                        font-weight: index == root.active_index ? 700 : 500;
-                        color: index == root.active_index ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                        text: root.queue_items[root.active_index].title;
+                        font-size: 14px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
                         overflow: elide;
                     }
 
                     Text {
-                        text: track.artist;
+                        text: root.queue_items[root.active_index].artist;
                         font-size: 11px;
+                        font-weight: 500;
                         color: ThemePalette.text_secondary;
                         overflow: elide;
                     }
                 }
 
-                // Col 3: Album (Strict fixed start at same pixel on all rows)
+                // Col 3: Album
                 VerticalLayout {
-                    x: 42px + Math.max(130px, (parent.width - 240px) * 0.50) + 14px;
+                    x: 44px + Math.max(130px, (parent.width - 250px) * 0.50) + 14px;
                     y: 0px;
-                    width: Math.max(80px, (parent.width - 124px) - self.x);
+                    width: Math.max(80px, (parent.width - 150px) - self.x);
                     height: parent.height;
                     alignment: center;
 
                     Text {
-                        text: track.album;
+                        text: root.queue_items[root.active_index].album;
                         font-size: 12px;
                         color: ThemePalette.text_secondary;
                         overflow: elide;
                     }
                 }
 
-                // Col 4: Hi-Res Badge slot (Strict fixed position x: parent.width - 116px)
+                // Col 4: Hi-Res Badge slot
                 Rectangle {
-                    x: parent.width - 116px;
+                    x: parent.width - 130px;
                     y: (parent.height - self.height) / 2;
-                    width: 48px;
-                    height: 20px;
+                    width: 44px;
+                    height: 18px;
 
-                    if track.is_hi_res : Rectangle {
-                        width: 44px;
+                    if root.queue_items[root.active_index].is_hi_res : Rectangle {
+                        width: 42px;
                         height: 18px;
                         border-radius: 4px;
                         background: ThemePalette.accent_subtle;
@@ -230,27 +598,86 @@ export component QueueView inherits Rectangle {
                     }
                 }
 
-                // Col 5: Duration (Strict fixed position x: parent.width - 62px, 14px right margin)
+                // Col 5: Duration
                 Rectangle {
-                    x: parent.width - 62px;
+                    x: parent.width - 80px;
                     y: 0px;
-                    width: 48px;
+                    width: 60px;
                     height: parent.height;
 
                     Text {
-                        text: track.duration_str;
-                        font-size: 11px;
-                        font-weight: 500;
-                        color: ThemePalette.text_muted;
+                        text: root.queue_items[root.active_index].duration_str;
+                        font-size: 12px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
                         horizontal-alignment: right;
                         vertical-alignment: center;
                         width: 100%;
                         height: 100%;
                     }
                 }
+            }
+        }
 
-                item_touch := TouchArea {
-                    double-clicked => { root.play_queue_item(index); }
+        // Active Queue: SECTION 2 - UPCOMING TRACKS (ANTREAN BERIKUTNYA)
+        if root.queue_items.length > 0 : VerticalLayout {
+            spacing: 8px;
+            vertical-stretch: 1;
+
+            HorizontalLayout {
+                height: 20px;
+                alignment: space-between;
+
+                Text {
+                    text: "ANTREAN BERIKUTNYA (" + Math.max(0, root.queue_items.length - 1) + " Lagu)";
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                    color: ThemePalette.text_muted;
+                    vertical-alignment: center;
+                }
+
+                Text {
+                    text: "💡 Geser kiri/kanan untuk hapus, atau gunakan tombol panah untuk menata urutan";
+                    font-size: 10px;
+                    color: ThemePalette.text_muted;
+                    vertical-alignment: center;
+                }
+            }
+
+            // List of upcoming tracks with swipe-to-remove and reorder
+            ListView {
+                for track[index] in root.queue_items : VerticalLayout {
+                    // Filter out the pinned current track
+                    if index != root.active_index : VerticalLayout {
+                        padding-bottom: 4px;
+
+                        QueueRow {
+                            track: track;
+                            queue_index: index;
+                            display_number: index < root.active_index ? index + 1 : index;
+                            is_first: (root.active_index == 0 && index == 1) || (root.active_index != 0 && index == 0);
+                            is_last: (root.active_index == root.queue_items.length - 1 && index == root.queue_items.length - 2) || (root.active_index != root.queue_items.length - 1 && index == root.queue_items.length - 1);
+
+                            play_item => {
+                                root.play_queue_item(index);
+                            }
+
+                            remove_item => {
+                                root.remove_queue_item(index);
+                            }
+
+                            move_up => {
+                                // Calculate target index moving up, skipping active_index if needed
+                                root.move_queue_item(index, index - 1);
+                            }
+
+                            move_down => {
+                                // Calculate target index moving down, skipping active_index if needed
+                                root.move_queue_item(index, index + 1);
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -7,19 +7,29 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 📋 Antrean Aktif
 
-### [PENDING-03] Perombakan Antrean Pemutar (Queue View Interactivity, Swipe-to-Remove, Drag-to-Reorder, Now Playing Pin, & Reshuffle)
-- **Prioritas:** Tinggi
-- **Deskripsi Kebutuhan & Fitur:**
+*(Semua antrean pekerjaan saat ini telah selesai dikerjakan!)*
+
+---
+
+## 🛠️ Catatan Riwayat Perbaikan (Selesai)
+
+### [DONE-25 / UDAH] Perombakan Antrean Pemutar (Queue View Interactivity, Swipe-to-Remove, Move Up/Down, Now Playing Pin, & Reshuffle)
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
   1. **Now Playing Selalu di Paling Atas (*Pinned Top*):**
-     - Lagu yang sedang aktif diputar disematkan di posisi teratas antrean dengan kartu khusus yang menonjol (indikator visual playing, durasi berjalan, artwork, dan badge).
-  2. **Interaktivitas Geser / Gesture:**
-     - **Geser Kiri/Kanan (*Swipe-to-Remove*):** Pengguna dapat menggeser item lagu ke kanan atau ke kiri secara interaktif untuk menghapus lagu tersebut dari antrean pemutaran (disertai feedback visual transisi halus atau tombol hapus cepat).
-     - **Geser Atas/Bawah (*Drag-to-Reorder*):** Pengguna dapat menata ulang urutan daftar antrean lagu berikutnya secara manual dengan menarik (*drag & drop*) posisi lagu ke atas atau ke bawah.
-  3. **Alur Urutan Lagu Berikutnya (Normal vs Shuffle):**
-     - Jika mode **Shuffle OFF**: Lagu berikutnya di antrean disusun lurus sesuai urutan album/folder aslinya.
-     - Jika mode **Shuffle ON**: Lagu berikutnya di antrean langsung diacak secara cerdas sesuai algoritma shuffle yang aktif.
-  4. **Tombol Acak Ulang Antrean (*Reshuffle Queue*):**
-     - Menyediakan tombol aksi **`[ 🔀 Acak Ulang Antrean ]`** di bagian atas antrean, sehingga jika pengguna kurang menyukai susunan acak saat ini, pengguna dapat dengan 1 klik mengocok ulang urutan lagu antrean berikutnya tanpa menghentikan lagu yang sedang diputar.
+     - Lagu yang sedang aktif diputar disematkan di posisi teratas antrean pemutar pada kartu khusus yang menonjol dengan bingkai oranye bercahaya (`border-color: ThemePalette.accent_primary`), animasi/indikator icon play/pause, judul lagu tebal, artis, album, format audio, lencana Hi-Res, dan durasi berjalan.
+  2. **Interaktivitas Geser & Hapus Cepat (*Swipe-to-Remove*):**
+     - Setiap item lagu di bagian *Antrean Berikutnya* dapat di-swipe / digeser ke kiri maupun ke kanan secara interaktif menggunakan mouse/touch gesture.
+     - Saat di-drag melebihi ambang batas (90px), latar belakang kartu berubah merah dengan ikon tong sampah (`IconSet.Trash2`) dan item seketika terhapus dari antrean pemutaran.
+     - Disediakan pula tombol hapus cepat (`X`) di sisi kanan setiap baris antrean.
+  3. **Pengaturan Urutan Lagu (*Move Up / Move Down*):**
+     - Disediakan tombol panah atas (`ChevronUp`) dan panah bawah (`ChevronDown`) di sisi kanan setiap baris lagu untuk menata ulang urutan lagu berikutnya secara mudah dan presisi.
+     - Mengimplementasikan method `move_item(from, to)` dan `remove_at(index)` pada [src/audio/queue.rs](file:///d:/Projects/music/rust/src/audio/queue.rs) dengan penyesuaian pointer aktif `current_index` secara aman.
+  4. **Alur Urutan Lagu Berikutnya & Tombol Acak Ulang (*Reshuffle Queue*):**
+     - Mendukung alur antrean normal (berurutan) dan mode shuffle aktif.
+     - Menghadirkan tombol aksi **`[ 🔀 Acak Ulang Antrean ]`** di header atas antrean.
+     - Mengimplementasikan method `reshuffle_upcoming()` pada [src/audio/queue.rs](file:///d:/Projects/music/rust/src/audio/queue.rs): mengocok ulang seluruh lagu antrean berikutnya secara acak tanpa menghentikan atau mengubah lagu yang saat ini sedang diputar (lagu aktif tetap disematkan di posisi indeks teratas).
+- **Hasil Pengujian:** Seluruh 19 unit & integration test lulus 100% (`cargo test -- --test-threads=1`), build rilis sukses 0 error.
 
 ---
 

@@ -136,6 +136,89 @@ impl PlaybackQueue {
         self.history.clear();
     }
 
+    pub fn remove_at(&mut self, index: usize) -> Option<TrackRecord> {
+        if index >= self.items.len() {
+            return None;
+        }
+
+        let removed = self.items.remove(index);
+
+        if self.items.is_empty() {
+            self.current_index = None;
+        } else if let Some(cur) = self.current_index {
+            if index == cur {
+                // If current item is removed, clamp current_index to valid range
+                if cur >= self.items.len() {
+                    self.current_index = Some(self.items.len() - 1);
+                }
+            } else if index < cur {
+                self.current_index = Some(cur - 1);
+            }
+        }
+
+        Some(removed)
+    }
+
+    pub fn move_item(&mut self, from: usize, to: usize) -> bool {
+        let len = self.items.len();
+        if from >= len || to >= len || from == to {
+            return false;
+        }
+
+        let item = self.items.remove(from);
+        self.items.insert(to, item);
+
+        // Adjust current_index pointer if needed
+        if let Some(cur) = self.current_index {
+            if cur == from {
+                self.current_index = Some(to);
+            } else if from < cur && to >= cur {
+                self.current_index = Some(cur - 1);
+            } else if from > cur && to <= cur {
+                self.current_index = Some(cur + 1);
+            }
+        }
+
+        true
+    }
+
+    pub fn reshuffle_upcoming(&mut self) {
+        if self.items.len() <= 1 {
+            return;
+        }
+
+        // If we have a current_index, keep it intact and reshuffle the rest!
+        if let Some(cur) = self.current_index {
+            let cur_item = self.items[cur].clone();
+            let mut remaining: Vec<TrackRecord> = self
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| *idx != cur)
+                .map(|(_, item)| item.clone())
+                .collect();
+
+            let mut rng = rand::rng();
+            // Fisher-Yates shuffle on remaining
+            for i in (1..remaining.len()).rev() {
+                let j = rng.random_range(0..=i);
+                remaining.swap(i, j);
+            }
+
+            let mut new_items = Vec::with_capacity(self.items.len());
+            new_items.push(cur_item);
+            new_items.extend(remaining);
+            self.items = new_items;
+            self.current_index = Some(0);
+        } else {
+            let mut rng = rand::rng();
+            for i in (1..self.items.len()).rev() {
+                let j = rng.random_range(0..=i);
+                self.items.swap(i, j);
+            }
+        }
+    }
+
     pub fn set_shuffle(&mut self, enabled: bool) {
         self.shuffle_enabled = enabled;
     }

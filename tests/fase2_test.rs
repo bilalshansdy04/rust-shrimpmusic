@@ -361,6 +361,58 @@ fn test_queue_shuffle_and_safety_tone() {
     let stopped = queue.remove_folder_tracks(cur_folder);
     assert!(stopped, "Should signal stop because currently playing track's folder was removed");
 
+    // 4b. Test Queue Reorder (move_item), Remove (remove_at), and Reshuffle (reshuffle_upcoming)
+    let mut test_q = PlaybackQueue::new();
+    let mut q_tracks = Vec::new();
+    for i in 1..=5 {
+        q_tracks.push(TrackRecord {
+            id: i,
+            folder_id: 1,
+            path: format!("D:\\Music\\t{}.flac", i),
+            title: format!("Song {}", i),
+            artist: "Artist".to_string(),
+            album: "Album".to_string(),
+            album_artist: None,
+            genre: None,
+            year: None,
+            track_number: Some(i as i32),
+            disc_number: Some(1),
+            duration_ms: 180_000,
+            sample_rate: 44100,
+            bit_depth: 16,
+            format: "FLAC".to_string(),
+            file_size: 10_000_000,
+            modified_time: 1000,
+            thumbnail_path: None,
+            has_lyrics: false,
+            play_count: 0,
+            last_played_at: None,
+            waveform: None,
+            is_active: true,
+        });
+    }
+    test_q.set_items(q_tracks, Some(0)); // Song 1 is playing at index 0
+    assert_eq!(test_q.current_track().unwrap().title, "Song 1");
+
+    // Reorder: move Song 4 (index 3) to index 1 (right after current playing)
+    let moved = test_q.move_item(3, 1);
+    assert!(moved);
+    assert_eq!(test_q.items()[0].title, "Song 1");
+    assert_eq!(test_q.items()[1].title, "Song 4");
+    assert_eq!(test_q.current_index(), Some(0));
+
+    // Remove: remove Song 2 (at index 2)
+    let removed = test_q.remove_at(2);
+    assert_eq!(removed.unwrap().title, "Song 2");
+    assert_eq!(test_q.len(), 4);
+    assert_eq!(test_q.current_index(), Some(0));
+
+    // Reshuffle upcoming: currently playing Song 1 (index 0) remains pinned at index 0!
+    test_q.reshuffle_upcoming();
+    assert_eq!(test_q.current_index(), Some(0));
+    assert_eq!(test_q.current_track().unwrap().title, "Song 1");
+    assert_eq!(test_q.len(), 4);
+
     // 5. Test Hearing Safety Chime generator
     let chime_samples = SafetyTestSignal::generate_10s_chime(48000, 2);
     // 10s * 48000 * 2 = 960000 samples

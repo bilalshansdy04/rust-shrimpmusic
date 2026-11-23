@@ -1092,6 +1092,43 @@ impl ShrimpMusicApp {
             }
         });
 
+        // 22b. Remove item from queue (via Swipe or Delete button)
+        let q_rm = q_ref.clone();
+        let w_rm = win_weak.clone();
+        self.window.on_on_remove_queue_item(move |idx| {
+            if idx >= 0 {
+                let mut q = q_rm.borrow_mut();
+                q.remove_at(idx as usize);
+                if let Some(w) = w_rm.upgrade() {
+                    Self::sync_queue_to_ui(&q, &w);
+                }
+            }
+        });
+
+        // 22c. Move / Reorder item in queue (Up/Down)
+        let q_mv = q_ref.clone();
+        let w_mv = win_weak.clone();
+        self.window.on_on_move_queue_item(move |from_idx, to_idx| {
+            if from_idx >= 0 && to_idx >= 0 {
+                let mut q = q_mv.borrow_mut();
+                q.move_item(from_idx as usize, to_idx as usize);
+                if let Some(w) = w_mv.upgrade() {
+                    Self::sync_queue_to_ui(&q, &w);
+                }
+            }
+        });
+
+        // 22d. Reshuffle upcoming queue on demand
+        let q_rshuf = q_ref.clone();
+        let w_rshuf = win_weak.clone();
+        self.window.on_on_reshuffle_queue(move || {
+            let mut q = q_rshuf.borrow_mut();
+            q.reshuffle_upcoming();
+            if let Some(w) = w_rshuf.upgrade() {
+                Self::sync_queue_to_ui(&q, &w);
+            }
+        });
+
         // 23. Clear queue
         let q_clear = q_ref.clone();
         let w_clear = win_weak.clone();
