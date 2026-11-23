@@ -1081,6 +1081,35 @@ impl ShrimpMusicApp {
                 }
                 let q = q_rom.borrow();
                 Self::sync_queue_to_ui_with_option(&q, &w, en);
+
+                // Refresh currently playing track and lyrics display
+                let playing_id = w.get_active_playing_id();
+                if playing_id > 0 {
+                    if let Ok(Some(track)) = db_rom.get_track_by_id(playing_id as i64) {
+                        let title = Self::format_text_display(&track.title, en);
+                        let artist = Self::format_text_display(&track.artist, en);
+                        let album = Self::format_text_display(&track.album, en);
+                        w.set_track_title(SharedString::from(title));
+                        w.set_track_artist(SharedString::from(artist));
+                        w.set_track_album(SharedString::from(album));
+
+                        if let Ok(Some(lyrics_rec)) = db_rom.get_lyrics(track.id) {
+                            let line_models: Vec<LyricLineModel> = lyrics_rec
+                                .lines
+                                .iter()
+                                .map(|l| {
+                                    let text = Self::format_text_display(&l.text, en);
+                                    LyricLineModel {
+                                        timestamp_ms: l.timestamp_ms as i32,
+                                        text: SharedString::from(text),
+                                        is_active: false,
+                                    }
+                                })
+                                .collect();
+                            w.set_lyrics_lines(ModelRc::new(VecModel::from(line_models)));
+                        }
+                    }
+                }
             }
         });
 
@@ -1349,10 +1378,13 @@ impl ShrimpMusicApp {
                 let line_models: Vec<LyricLineModel> = lyrics_rec
                     .lines
                     .iter()
-                    .map(|l| LyricLineModel {
-                        timestamp_ms: l.timestamp_ms as i32,
-                        text: SharedString::from(l.text.clone()),
-                        is_active: false,
+                    .map(|l| {
+                        let text = Self::format_text_display(&l.text, rom);
+                        LyricLineModel {
+                            timestamp_ms: l.timestamp_ms as i32,
+                            text: SharedString::from(text),
+                            is_active: false,
+                        }
                     })
                     .collect();
                 w.set_lyrics_lines(ModelRc::new(VecModel::from(line_models)));
