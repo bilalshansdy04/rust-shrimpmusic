@@ -13,6 +13,19 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
 
+### [DONE-28 / UDAH] Perbaikan Interaktivitas Sakelar Folder Pustaka & Pemindaian Ulang (Rescan/Reload) Real-Time
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
+  1. **Perbaikan Sakelar Folder (Toggle Switch Interactivity):**
+     - **Penyebab:** Pada [ui/views/settings.slint](file:///d:/Projects/music/rust/ui/views/settings.slint), elemen `TouchArea` berada di luar pembungkus `Rectangle` visual sakelar, dan pemanggilan callback `on_toggle_folder` di [src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs) sebelumnya hanya memperbarui database tanpa menyinkronkan ulang model data `settings_folders`, `folder_scopes`, dan `library_tracks` ke UI secara real-time.
+     - **Solusi:** Memperbaiki penataan layout `TouchArea` di atas seluruh area sakelar (36x20px), serta menambahkan pemanggilan `Self::sync_folders_and_scopes_to_ui` dan pembaruan `w.set_library_tracks(...)` secara instan seketika sakelar diklik.
+  2. **Perbaikan Tombol Rescan/Reload Folder (`[ 🔄 ]`):**
+     - **Penyebab:** Sebelumnya callback `on_rescan_folder` berjalan diam-diam tanpa memunculkan banner pemindaian (`is_scanning`), dan tidak menyinkronkan ulang statistik jumlah lagu per folder di menu pengaturan, sehingga tampak seolah-olah lagu tidak bertambah/hilang.
+     - **Solusi:** Mengintegrasikan channel progres (`ScanProgress`), banner animasi pemindaian di bar atas pustaka (`Ditemukan X file musik. Membaca metadata & cover art...`), serta pembaruan data folder (`settings_folders`), cakupan scope (`folder_scopes`), dan daftar lagu (`library_tracks`) secara otomatis begitu rescan selesai.
+- **Hasil Pengujian:** Seluruh 19 unit & integration test lulus 100% (`cargo test -- --test-threads=1`), build rilis sukses 0 error.
+
+---
+
 ### [DONE-27 / UDAH] Perbaikan Isolasi Cakupan Folder (Folder Scope Isolation) & Analisis Efisiensi Artwork List
 - **Udah diperbaiki tanggal 11/23/2026**
 - **Detail Implementasi:**

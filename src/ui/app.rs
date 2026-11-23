@@ -221,16 +221,14 @@ impl ShrimpMusicApp {
         }
     }
 
-    fn refresh_folders(&self) {
-        if let Ok(folders) = self.db.get_all_folders() {
+    fn sync_folders_and_scopes_to_ui(db: &Database, window: &AppWindow, active_scope_id: Option<i64>) {
+        if let Ok(folders) = db.get_all_folders() {
             let mut folder_models = Vec::new();
             let mut scope_models = vec![FolderScopeModel {
                 id: -1,
                 display_name: SharedString::from("Semua Folder"),
-                is_selected: self.active_scope.get().is_none(),
+                is_selected: active_scope_id.is_none(),
             }];
-
-            let active_scope_id = self.active_scope.get();
 
             for f in &folders {
                 folder_models.push(FolderEntryModel {
@@ -254,9 +252,13 @@ impl ShrimpMusicApp {
                 }
             }
 
-            self.window.set_settings_folders(ModelRc::new(VecModel::from(folder_models)));
-            self.window.set_folder_scopes(ModelRc::new(VecModel::from(scope_models)));
+            window.set_settings_folders(ModelRc::new(VecModel::from(folder_models)));
+            window.set_folder_scopes(ModelRc::new(VecModel::from(scope_models)));
         }
+    }
+
+    fn refresh_folders(&self) {
+        Self::sync_folders_and_scopes_to_ui(&self.db, &self.window, self.active_scope.get());
     }
 
     pub fn convert_tracks_to_models(tracks: &[TrackRecord]) -> Vec<TrackItemModel> {
@@ -668,11 +670,14 @@ impl ShrimpMusicApp {
             }
         });
 
-        // 9. Folder switch toggle (Strict Stop < 50ms)
+        // 9. Folder switch toggle (Strict Stop < 50ms & instant UI update)
         let db10 = db.clone();
         let p10 = player.clone();
         let q10 = q_ref.clone();
         let w10 = win_weak.clone();
+        let app_scope10 = self.active_scope.clone();
+        let app_sort10 = self.sort_criteria.clone();
+        let app_asc10 = self.sort_ascending.clone();
         self.window.on_on_toggle_folder(move |folder_id, enabled| {
             let _ = db10.set_folder_enabled(folder_id as i64, enabled);
             if !enabled {
@@ -685,6 +690,15 @@ impl ShrimpMusicApp {
                         w.set_track_title(SharedString::from("Pemutaran Dihentikan"));
                         w.set_track_artist(SharedString::from("Folder dinonaktifkan"));
                     }
+                }
+            }
+
+            // Instantly refresh folders and tracks in UI
+            if let Some(w) = w10.upgrade() {
+                Self::sync_folders_and_scopes_to_ui(&db10, &w, app_scope10.get());
+                if let Ok(tracks) = db10.list_tracks(app_scope10.get(), app_sort10.get(), app_asc10.get()) {
+                    let models = Self::convert_tracks_to_models(&tracks);
+                    w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                 }
             }
         });
@@ -861,32 +875,93 @@ impl ShrimpMusicApp {
             }
         });
 
-        // 17. Rescan single folder
+        // 17. Rescan single folder (with full progress notification and folder stats sync)
         let w_rescan = win_weak.clone();
         let app_scope_rescan = self.active_scope.clone();
         let app_sort_rescan = self.sort_criteria.clone();
         let app_asc_rescan = self.sort_ascending.clone();
         self.window.on_on_rescan_folder(move |folder_id| {
-            let w_c = w_rescan.clone();
+            let win_c = w_rescan.clone();
             let db_path = default_db_path();
-            let cur_scope = app_scope_rescan.get();
+            let cur_scope_ref = app_scope_rescan.clone();
             let cur_sort = app_sort_rescan.get();
             let cur_asc = app_asc_rescan.get();
+
             std::thread::spawn(move || {
                 if let Ok(worker_db) = open_database(&db_path) {
                     if let Ok(folders) = worker_db.get_all_folders() {
                         if let Some(folder) = folders.iter().find(|f| f.id == folder_id as i64) {
+                            let folder_path = std::path::PathBuf::from(&folder.folder_path);
+                            let folder_name_display = folder_path
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or(&folder.folder_path)
+                                .to_string();
+
+                            // Show scanning banner
+                            let win_start = win_c.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(w) = win_start.upgrade() {
+                                    w.set_is_scanning(true);
+                                    w.set_scan_status_text(SharedString::from(format!(
+                                        "Memindai ulang folder '{}'...",
+                                        folder_name_display
+                                    )));
+                                }
+                            });
+
+                            let (prog_tx, prog_rx) = crossbeam_channel::unbounded();
+                            let win_prog = win_c.clone();
+
+                            let monitor_handle = std::thread::spawn(move || {
+                                while let Ok(msg) = prog_rx.recv() {
+                                    match msg {
+                                        ScanProgress::Started { total_estimated } => {
+                                            let w_p = win_prog.clone();
+                                            let _ = slint::invoke_from_event_loop(move || {
+                                                if let Some(w) = w_p.upgrade() {
+                                                    w.set_scan_status_text(SharedString::from(format!(
+                                                        "Ditemukan {} file musik. Memperbarui metadata...",
+                                                        total_estimated
+                                                    )));
+                                                }
+                                            });
+                                        }
+                                        ScanProgress::FileScanned { current, total, .. } => {
+                                            if current % 3 == 0 || current == total {
+                                                let w_p = win_prog.clone();
+                                                let _ = slint::invoke_from_event_loop(move || {
+                                                    if let Some(w) = w_p.upgrade() {
+                                                        w.set_scan_status_text(SharedString::from(format!(
+                                                            "Membaca lagu {} dari {}...",
+                                                            current, total
+                                                        )));
+                                                    }
+                                                });
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            });
+
                             let scanner = Scanner::new();
                             let _ = scanner.scan_folder(
                                 &worker_db,
                                 folder.id,
-                                std::path::Path::new(&folder.folder_path),
+                                &folder_path,
                                 None,
-                                None,
+                                Some(&prog_tx),
                             );
 
+                            drop(prog_tx);
+                            let _ = monitor_handle.join();
+
                             let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(w) = w_c.upgrade() {
+                                if let Some(w) = win_c.upgrade() {
+                                    w.set_is_scanning(false);
+                                    let cur_scope = cur_scope_ref.get();
+                                    Self::sync_folders_and_scopes_to_ui(&worker_db, &w, cur_scope);
                                     if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
                                         let models = Self::convert_tracks_to_models(&tracks);
                                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));

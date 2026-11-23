@@ -749,13 +749,20 @@ export component SettingsDrawer inherits Rectangle {
                                 y: (parent.height - self.height) / 2;
 
                                 Rectangle {
-                                    x: folder.is_enabled ? 18px : 2px;
-                                    y: 2px;
-                                    width: 16px;
-                                    height: 16px;
-                                    border-radius: 8px;
-                                    background: #FFFFFF;
-                                    animate x { duration: 150ms; }
+                                    width: 36px;
+                                    height: 20px;
+                                    border-radius: 10px;
+                                    background: folder.is_enabled ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+
+                                    Rectangle {
+                                        x: folder.is_enabled ? 18px : 2px;
+                                        y: 2px;
+                                        width: 16px;
+                                        height: 16px;
+                                        border-radius: 8px;
+                                        background: #FFFFFF;
+                                        animate x { duration: 150ms; }
+                                    }
                                 }
 
                                 TouchArea {
