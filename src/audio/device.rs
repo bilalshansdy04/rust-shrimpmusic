@@ -74,8 +74,6 @@ impl AudioDeviceInfo {
         }
 
         // 3. Dedicated USB DAC / Type-C Converters with DAC chip
-        let is_usb = name_lower.contains("usb") || id_lower.contains("usb") || id_lower.contains("usbaudio");
-
         let known_dac_chip_or_brands = [
             "jadeaudio", "ja11", "fiio", "topping", "ifi", "moondrop", "ibasso",
             "shanling", "tempotec", "sonata", "alc5686", "cx31993", "cs43131",
@@ -84,10 +82,24 @@ impl AudioDeviceInfo {
             "dawn", "space", "shanghai", "questyle", "chord", "audioquest",
         ];
 
-        let has_dac_chip_or_brand = known_dac_chip_or_brands.iter().any(|k| name_lower.contains(k) || id_lower.contains(k));
+        let has_dac_chip_or_brand = known_dac_chip_or_brands
+            .iter()
+            .any(|k| name_lower.contains(k) || id_lower.contains(k));
+
+        let is_usb = name_lower.contains("usb")
+            || id_lower.contains("usb")
+            || id_lower.contains("usbaudio")
+            || has_dac_chip_or_brand;
 
         if is_usb {
-            if name_lower.contains("type-c") || name_lower.contains("type c") || name_lower.contains("converter") || name_lower.contains("dongle") || name_lower.contains("ja11") || name_lower.contains("cx31993") || name_lower.contains("alc5686") {
+            if name_lower.contains("type-c")
+                || name_lower.contains("type c")
+                || name_lower.contains("converter")
+                || name_lower.contains("dongle")
+                || name_lower.contains("ja11")
+                || name_lower.contains("cx31993")
+                || name_lower.contains("alc5686")
+            {
                 return (DeviceClassification::TypeCDacConverter, true);
             }
             if has_dac_chip_or_brand || name_lower.contains("dac") {
