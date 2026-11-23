@@ -413,6 +413,13 @@ fn test_queue_shuffle_and_safety_tone() {
     assert_eq!(test_q.current_track().unwrap().title, "Song 1");
     assert_eq!(test_q.len(), 4);
 
+    // Verify next() always plays the first upcoming item (items[1])
+    let upcoming_expected_title = test_q.items()[1].title.clone();
+    let next_track = test_q.next().unwrap();
+    assert_eq!(next_track.title, upcoming_expected_title);
+    assert_eq!(test_q.current_track().unwrap().title, upcoming_expected_title);
+    assert_eq!(test_q.current_index(), Some(0));
+
     // 5. Test Hearing Safety Chime generator
     let chime_samples = SafetyTestSignal::generate_10s_chime(48000, 2);
     // 10s * 48000 * 2 = 960000 samples

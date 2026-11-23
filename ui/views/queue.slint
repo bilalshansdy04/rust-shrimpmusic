@@ -649,16 +649,16 @@ export component QueueView inherits Rectangle {
             // List of upcoming tracks with swipe-to-remove and reorder
             ListView {
                 for track[index] in root.queue_items : VerticalLayout {
-                    // Filter out the pinned current track
-                    if index != root.active_index : VerticalLayout {
+                    // Filter out the pinned current track (which is always at index 0)
+                    if index > 0 : VerticalLayout {
                         padding-bottom: 6px;
 
                         QueueRow {
                             track: track;
                             queue_index: index;
-                            display_number: index < root.active_index ? index + 1 : index;
-                            is_first: (root.active_index == 0 && index == 1) || (root.active_index != 0 && index == 0);
-                            is_last: (root.active_index == root.queue_items.length - 1 && index == root.queue_items.length - 2) || (root.active_index != root.queue_items.length - 1 && index == root.queue_items.length - 1);
+                            display_number: index;
+                            is_first: index == 1;
+                            is_last: index == root.queue_items.length - 1;
 
                             play_item => {
                                 root.play_queue_item(index);
@@ -669,13 +669,15 @@ export component QueueView inherits Rectangle {
                             }
 
                             move_up => {
-                                // Calculate target index moving up, skipping active_index if needed
-                                root.move_queue_item(index, index - 1);
+                                if index > 1 {
+                                    root.move_queue_item(index, index - 1);
+                                }
                             }
 
                             move_down => {
-                                // Calculate target index moving down, skipping active_index if needed
-                                root.move_queue_item(index, index + 1);
+                                if index < root.queue_items.length - 1 {
+                                    root.move_queue_item(index, index + 1);
+                                }
                             }
                         }
                     }

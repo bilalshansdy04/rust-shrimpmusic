@@ -92,12 +92,40 @@ impl PlaybackQueue {
     }
 
     pub fn set_items(&mut self, items: Vec<TrackRecord>, start_index: Option<usize>) {
-        self.items = items;
-        self.current_index = start_index.filter(|&idx| idx < self.items.len());
-        self.history.clear();
-        if let Some(idx) = self.current_index {
-            self.record_history(self.items[idx].id);
+        if items.is_empty() {
+            self.items.clear();
+            self.current_index = None;
+            self.history.clear();
+            return;
         }
+
+        let start = start_index.unwrap_or(0).min(items.len() - 1);
+        let selected_item = items[start].clone();
+
+        let mut ordered_items = Vec::with_capacity(items.len());
+        ordered_items.push(selected_item);
+
+        let mut remaining: Vec<TrackRecord> = items
+            .into_iter()
+            .enumerate()
+            .filter(|(idx, _)| *idx != start)
+            .map(|(_, item)| item)
+            .collect();
+
+        if self.shuffle_enabled {
+            let mut rng = rand::rng();
+            for i in (1..remaining.len()).rev() {
+                let j = rng.random_range(0..=i);
+                remaining.swap(i, j);
+            }
+        }
+
+        ordered_items.extend(remaining);
+
+        self.items = ordered_items;
+        self.current_index = Some(0);
+        self.history.clear();
+        self.record_history(self.items[0].id);
     }
 
     pub fn current_track(&self) -> Option<&TrackRecord> {
@@ -122,9 +150,11 @@ impl PlaybackQueue {
 
     pub fn set_current_index(&mut self, index: usize) -> Option<&TrackRecord> {
         if index < self.items.len() {
-            self.current_index = Some(index);
-            self.record_history(self.items[index].id);
-            Some(&self.items[index])
+            let selected_item = self.items.remove(index);
+            self.items.insert(0, selected_item);
+            self.current_index = Some(0);
+            self.record_history(self.items[0].id);
+            Some(&self.items[0])
         } else {
             None
         }
@@ -253,25 +283,32 @@ impl PlaybackQueue {
             return self.current_track();
         }
 
-        // Both in shuffle mode (where upcoming tracks are already ordered in the queue)
-        // and normal mode, the next track is ALWAYS the next sequential item in the visual queue!
-        let next_idx = match self.current_index {
-            Some(idx) => {
-                if idx + 1 < self.items.len() {
-                    idx + 1
-                } else if self.loop_mode == LoopMode::All {
-                    0
-                } else {
-                    return None; // Reached end of queue, stop
-                }
+        if self.items.len() == 1 {
+            if self.loop_mode == LoopMode::All {
+                return self.current_track();
+            } else {
+                return None;
             }
-            None => 0,
-        };
+        }
 
-        self.current_index = Some(next_idx);
-        let track_id = self.items[next_idx].id;
+        // Rotate: The finished track at index 0 moves to the end of the queue,
+        // and index 1 becomes index 0 (the new current playing track)!
+        let prev = self.items.remove(0);
+
+        if self.loop_mode == LoopMode::All {
+            self.items.push(prev);
+        } else {
+            // Loop Off: Check if we have more items.
+            // If items is not empty, prev is rotated to the back as history/finished,
+            // or if we reached the original queue end, we handle standard queue behavior.
+            // Putting it at the back keeps all items in the queue structure.
+            self.items.push(prev);
+        }
+
+        self.current_index = Some(0);
+        let track_id = self.items[0].id;
         self.record_history(track_id);
-        Some(&self.items[next_idx])
+        Some(&self.items[0])
     }
 
     pub fn previous(&mut self) -> Option<&TrackRecord> {
@@ -283,22 +320,18 @@ impl PlaybackQueue {
             return self.current_track();
         }
 
-        let prev_idx = match self.current_index {
-            Some(idx) => {
-                if idx > 0 {
-                    idx - 1
-                } else if self.loop_mode == LoopMode::All {
-                    self.items.len() - 1
-                } else {
-                    0
-                }
-            }
-            None => 0,
-        };
-        self.current_index = Some(prev_idx);
-        let track_id = self.items[prev_idx].id;
+        if self.items.len() == 1 {
+            return self.current_track();
+        }
+
+        // Pop last item and put it at index 0 (rotate backward)
+        let last = self.items.pop().unwrap();
+        self.items.insert(0, last);
+
+        self.current_index = Some(0);
+        let track_id = self.items[0].id;
         self.record_history(track_id);
-        Some(&self.items[prev_idx])
+        Some(&self.items[0])
     }
 
     pub fn remove_folder_tracks(&mut self, folder_id: i64) -> bool {
