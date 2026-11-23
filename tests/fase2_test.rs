@@ -443,10 +443,10 @@ fn test_artwork_downscaling() {
     let thumb_file = std::path::Path::new(&path_str);
     assert!(thumb_file.exists());
 
-    // Verify dimensions strictly downscaled to 250x250
+    // Verify dimensions downscaled to anti-aliased 500x500
     let loaded = image::ImageReader::open(thumb_file).unwrap().decode().unwrap();
-    assert_eq!(loaded.width(), 250);
-    assert_eq!(loaded.height(), 250);
+    assert_eq!(loaded.width(), 500);
+    assert_eq!(loaded.height(), 500);
 
     let _ = std::fs::remove_file(thumb_file);
 }

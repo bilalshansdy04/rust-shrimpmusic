@@ -22,6 +22,7 @@ description = "ShrimpMusic Player - Made by Bilal"
 [dependencies]
 crossbeam-channel = "0.5.17"
 directories = "6.0.0"
+fast_image_resize = { version = "5.1.4", features = ["image"] }
 image = { version = "0.25.10", features = ["jpeg", "png", "webp"] }
 lofty = "0.25.5"
 rand = "0.10.4"

@@ -448,8 +448,13 @@ impl ShrimpMusicApp {
             let mut q = q6.borrow_mut();
             let new_shuf = !q.is_shuffle();
             q.set_shuffle(new_shuf);
+            if new_shuf {
+                // When enabling shuffle, re-order upcoming items so the queue view reflects the randomized order!
+                q.reshuffle_upcoming();
+            }
             if let Some(w) = w6.upgrade() {
                 w.set_is_shuffle(new_shuf);
+                Self::sync_queue_to_ui(&q, &w);
             }
         });
 

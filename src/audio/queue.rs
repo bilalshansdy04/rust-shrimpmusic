@@ -253,30 +253,25 @@ impl PlaybackQueue {
             return self.current_track();
         }
 
-        if self.shuffle_enabled {
-            let next_idx = self.pick_shuffle_index();
-            self.current_index = Some(next_idx);
-            let track_id = self.items[next_idx].id;
-            self.record_history(track_id);
-            Some(&self.items[next_idx])
-        } else {
-            let next_idx = match self.current_index {
-                Some(idx) => {
-                    if idx + 1 < self.items.len() {
-                        idx + 1
-                    } else if self.loop_mode == LoopMode::All {
-                        0
-                    } else {
-                        return None; // Reached end, Stop
-                    }
+        // Both in shuffle mode (where upcoming tracks are already ordered in the queue)
+        // and normal mode, the next track is ALWAYS the next sequential item in the visual queue!
+        let next_idx = match self.current_index {
+            Some(idx) => {
+                if idx + 1 < self.items.len() {
+                    idx + 1
+                } else if self.loop_mode == LoopMode::All {
+                    0
+                } else {
+                    return None; // Reached end of queue, stop
                 }
-                None => 0,
-            };
-            self.current_index = Some(next_idx);
-            let track_id = self.items[next_idx].id;
-            self.record_history(track_id);
-            Some(&self.items[next_idx])
-        }
+            }
+            None => 0,
+        };
+
+        self.current_index = Some(next_idx);
+        let track_id = self.items[next_idx].id;
+        self.record_history(track_id);
+        Some(&self.items[next_idx])
     }
 
     pub fn previous(&mut self) -> Option<&TrackRecord> {
@@ -301,6 +296,8 @@ impl PlaybackQueue {
             None => 0,
         };
         self.current_index = Some(prev_idx);
+        let track_id = self.items[prev_idx].id;
+        self.record_history(track_id);
         Some(&self.items[prev_idx])
     }
 
