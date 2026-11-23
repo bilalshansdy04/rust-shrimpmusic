@@ -330,7 +330,7 @@ impl PlaybackQueue {
         }
     }
 
-    fn pick_shuffle_index(&self) -> usize {
+    pub fn pick_shuffle_index(&self) -> usize {
         let mut rng = rand::rng();
         let n = self.items.len();
         if n <= 1 {
