@@ -25,6 +25,7 @@ export component SettingsDrawer inherits Rectangle {
     in property <string> exclusive_hint: "";
     in property <bool> is_dark: true;
     in property <int> shuffle_style: 0;
+    in property <bool> show_romanized: false;
 
     // EQ properties
     in property <bool> is_eq_enabled: false;
@@ -40,6 +41,7 @@ export component SettingsDrawer inherits Rectangle {
     callback select_device(string);
     callback toggle_dark_mode(bool);
     callback select_shuffle_style(int);
+    callback toggle_romanized(bool);
 
     callback toggle_eq(bool);
     callback set_eq_band(int, float);
@@ -932,6 +934,75 @@ export component SettingsDrawer inherits Rectangle {
                             background: root.shuffle_style == 2 ? ThemePalette.accent_primary : ThemePalette.bg_elevated;
                             HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "Favffle (Favorit)"; font-size: 11px; font-weight: 600; color: root.shuffle_style == 2 ? #FFFFFF : ThemePalette.text_primary; vertical-alignment: center; } }
                             TouchArea { clicked => { root.select_shuffle_style(2); } }
+                        }
+                    }
+                }
+
+                // Romanisasi Teks Asing (Hangul Korea & Romaji Jepang -> Latin ABC)
+                VerticalLayout {
+                    spacing: 6px;
+                    vertical-stretch: 0;
+                    alignment: start;
+
+                    Text {
+                        text: "ROMANISASI TEKS (KOREA & JEPANG)";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: ThemePalette.accent_primary;
+                    }
+
+                    Rectangle {
+                        border-radius: 10px;
+                        background: ThemePalette.bg_elevated;
+                        border-width: 1px;
+                        border-color: ThemePalette.border_subtle;
+
+                        HorizontalLayout {
+                            padding: 12px;
+                            alignment: space-between;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 2px;
+                                width: 75%;
+
+                                Text {
+                                    text: "Konversi ke Huruf Latin (ABC)";
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                    color: ThemePalette.text_primary;
+                                }
+
+                                Text {
+                                    text: "Ubah Hangul Korea & Kana Jepang menjadi Romaji/Latin di daftar lagu, antrean & pencarian.";
+                                    font-size: 10px;
+                                    color: ThemePalette.text_secondary;
+                                    wrap: word-wrap;
+                                }
+                            }
+
+                            // Switch
+                            Rectangle {
+                                width: 36px;
+                                height: 20px;
+                                border-radius: 10px;
+                                background: root.show_romanized ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                                y: (parent.height - self.height) / 2;
+
+                                Rectangle {
+                                    x: root.show_romanized ? 18px : 2px;
+                                    y: 2px;
+                                    width: 16px;
+                                    height: 16px;
+                                    border-radius: 8px;
+                                    background: #FFFFFF;
+                                    animate x { duration: 150ms; }
+                                }
+
+                                TouchArea {
+                                    clicked => { root.toggle_romanized(!root.show_romanized); }
+                                }
+                            }
                         }
                     }
                 }

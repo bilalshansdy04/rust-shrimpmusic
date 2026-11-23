@@ -30,6 +30,7 @@ pub struct ShrimpMusicApp {
     active_scope: Cell<Option<i64>>,
     sort_criteria: Cell<SortCriteria>,
     sort_ascending: Cell<bool>,
+    show_romanized: Cell<bool>,
     last_lyrics_scroll_time: Rc<Cell<Option<Instant>>>,
     _timer: slint::Timer,
     win_volume: crate::audio::WindowsVolumeController,
@@ -135,8 +136,16 @@ impl ShrimpMusicApp {
             .map(|s| s != "0")
             .unwrap_or(true);
 
+        let show_romanized = db
+            .get_preference("show_romanized")
+            .ok()
+            .flatten()
+            .map(|s| s == "1" || s == "true")
+            .unwrap_or(true); // Default true so Korean/Japanese songs instantly show Romanized!
+
         window.set_library_sort_criteria(sort_criteria.to_i32());
         window.set_library_sort_ascending(sort_ascending);
+        window.set_show_romanized(show_romanized);
 
         let app = Self {
             window,
@@ -148,6 +157,7 @@ impl ShrimpMusicApp {
             active_scope: Cell::new(None),
             sort_criteria: Cell::new(sort_criteria),
             sort_ascending: Cell::new(sort_ascending),
+            show_romanized: Cell::new(show_romanized),
             last_lyrics_scroll_time,
             _timer: timer,
             win_volume,
@@ -261,18 +271,42 @@ impl ShrimpMusicApp {
         Self::sync_folders_and_scopes_to_ui(&self.db, &self.window, self.active_scope.get());
     }
 
+    pub fn format_text_display(original: &str, romanize: bool) -> String {
+        if !romanize || original.is_empty() {
+            return original.to_string();
+        }
+        let rom = crate::library::romanize::romanize_text(original);
+        if rom != original {
+            // Text contained Korean/Japanese characters and was converted
+            // E.g. "하츠투하츠" -> "하츠투하츠 (hacheutuhacheu)"
+            // or if original is "Hearts2Hearts (하츠투하츠)" -> "Hearts2Hearts (hacheutuhacheu)"
+            rom
+        } else {
+            original.to_string()
+        }
+    }
+
     pub fn convert_tracks_to_models(tracks: &[TrackRecord]) -> Vec<TrackItemModel> {
+        Self::convert_tracks_to_models_with_option(tracks, false)
+    }
+
+    pub fn convert_tracks_to_models_with_option(tracks: &[TrackRecord], romanize: bool) -> Vec<TrackItemModel> {
         tracks
             .iter()
             .map(|t| {
                 let duration_sec = t.duration_ms / 1000;
                 let mins = duration_sec / 60;
                 let secs = duration_sec % 60;
+
+                let title = Self::format_text_display(&t.title, romanize);
+                let artist = Self::format_text_display(&t.artist, romanize);
+                let album = Self::format_text_display(&t.album, romanize);
+
                 TrackItemModel {
                     id: t.id as i32,
-                    title: SharedString::from(t.title.clone()),
-                    artist: SharedString::from(t.artist.clone()),
-                    album: SharedString::from(t.album.clone()),
+                    title: SharedString::from(title),
+                    artist: SharedString::from(artist),
+                    album: SharedString::from(album),
                     duration_str: SharedString::from(format!("{}:{:02}", mins, secs)),
                     format: SharedString::from(t.format.clone()),
                     is_hi_res: t.sample_rate >= 88200 || t.bit_depth >= 24,
@@ -286,15 +320,16 @@ impl ShrimpMusicApp {
         let scope = self.active_scope.get();
         let sort = self.sort_criteria.get();
         let asc = self.sort_ascending.get();
+        let rom = self.show_romanized.get();
 
         if let Ok(tracks) = self.db.list_tracks(scope, sort, asc) {
-            let models = Self::convert_tracks_to_models(&tracks);
+            let models = Self::convert_tracks_to_models_with_option(&tracks, rom);
 
             let mut q = self.queue.borrow_mut();
             if q.is_empty() {
                 q.set_items(tracks, None);
             }
-            Self::sync_queue_to_ui(&q, &self.window);
+            Self::sync_queue_to_ui_with_option(&q, &self.window, rom);
 
             self.window.set_library_tracks(ModelRc::new(VecModel::from(models)));
         }
@@ -321,7 +356,11 @@ impl ShrimpMusicApp {
     }
 
     fn sync_queue_to_ui(queue: &PlaybackQueue, window: &AppWindow) {
-        let models = Self::convert_tracks_to_models(queue.items());
+        Self::sync_queue_to_ui_with_option(queue, window, window.get_show_romanized())
+    }
+
+    fn sync_queue_to_ui_with_option(queue: &PlaybackQueue, window: &AppWindow, romanize: bool) {
+        let models = Self::convert_tracks_to_models_with_option(queue.items(), romanize);
         window.set_queue_items(ModelRc::new(VecModel::from(models)));
         if let Some(idx) = queue.current_index() {
             window.set_active_queue_index(idx as i32);
@@ -471,6 +510,7 @@ impl ShrimpMusicApp {
         let app_scope = self.active_scope.clone();
         let app_sort = self.sort_criteria.clone();
         let app_asc = self.sort_ascending.clone();
+        let app_rom = self.show_romanized.clone();
         self.window.on_on_scope_changed(move |scope_id| {
             let target_scope = if scope_id < 0 { None } else { Some(scope_id as i64) };
             app_scope.set(target_scope);
@@ -488,7 +528,7 @@ impl ShrimpMusicApp {
                 }
 
                 if let Ok(tracks) = db_scope.list_tracks(target_scope, app_sort.get(), app_asc.get()) {
-                    let models = Self::convert_tracks_to_models(&tracks);
+                    let models = Self::convert_tracks_to_models_with_option(&tracks, app_rom.get());
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                 }
             }
@@ -500,6 +540,7 @@ impl ShrimpMusicApp {
         let app_scope_sort = self.active_scope.clone();
         let app_sort_crit = self.sort_criteria.clone();
         let app_sort_asc = self.sort_ascending.clone();
+        let app_rom_sort = self.show_romanized.clone();
         self.window.on_on_sort_changed(move |crit_id, asc| {
             let criteria = SortCriteria::from_i32(crit_id);
             app_sort_crit.set(criteria);
@@ -513,7 +554,7 @@ impl ShrimpMusicApp {
                 w.set_library_sort_ascending(asc);
 
                 if let Ok(tracks) = db_sort.list_tracks(app_scope_sort.get(), criteria, asc) {
-                    let models = Self::convert_tracks_to_models(&tracks);
+                    let models = Self::convert_tracks_to_models_with_option(&tracks, app_rom_sort.get());
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                 }
             }
@@ -525,17 +566,18 @@ impl ShrimpMusicApp {
         let app_scope_s = self.active_scope.clone();
         let app_sort_s = self.sort_criteria.clone();
         let app_asc_s = self.sort_ascending.clone();
+        let app_rom_s = self.show_romanized.clone();
         self.window.on_on_search_changed(move |query| {
             if let Some(w) = w_search.upgrade() {
                 let trimmed = query.trim().to_string();
                 if trimmed.is_empty() {
                     if let Ok(tracks) = db_search.list_tracks(app_scope_s.get(), app_sort_s.get(), app_asc_s.get()) {
-                        let models = Self::convert_tracks_to_models(&tracks);
+                        let models = Self::convert_tracks_to_models_with_option(&tracks, app_rom_s.get());
                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                     }
                 } else {
                     if let Ok(results) = SearchEngine::search(&db_search, &trimmed) {
-                        let models = Self::convert_tracks_to_models(&results.tracks);
+                        let models = Self::convert_tracks_to_models_with_option(&results.tracks, app_rom_s.get());
                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                         w.set_active_view(0); // Switch to library view to see search results
                     }
@@ -880,12 +922,14 @@ impl ShrimpMusicApp {
         let app_scope_rescan = self.active_scope.clone();
         let app_sort_rescan = self.sort_criteria.clone();
         let app_asc_rescan = self.sort_ascending.clone();
+        let app_rom_rescan = self.show_romanized.clone();
         self.window.on_on_rescan_folder(move |folder_id| {
             let win_c = w_rescan.clone();
             let db_path = default_db_path();
             let cur_scope_ref = app_scope_rescan.clone();
             let cur_sort = app_sort_rescan.get();
             let cur_asc = app_asc_rescan.get();
+            let cur_rom = app_rom_rescan.get();
 
             std::thread::spawn(move || {
                 if let Ok(worker_db) = open_database(&db_path) {
@@ -963,7 +1007,7 @@ impl ShrimpMusicApp {
                                     let cur_scope = cur_scope_ref.get();
                                     Self::sync_folders_and_scopes_to_ui(&worker_db, &w, cur_scope);
                                     if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
-                                        let models = Self::convert_tracks_to_models(&tracks);
+                                        let models = Self::convert_tracks_to_models_with_option(&tracks, cur_rom);
                                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                                     }
                                 }
@@ -1012,17 +1056,42 @@ impl ShrimpMusicApp {
             let _ = db18.set_preference("dark_mode", if dark { "1" } else { "0" });
         });
 
+        // 20b. Romanized text toggle
+        let db_rom = db.clone();
+        let w_rom = win_weak.clone();
+        let app_rom_toggle = self.show_romanized.clone();
+        let app_scope_rom = self.active_scope.clone();
+        let app_sort_rom = self.sort_criteria.clone();
+        let app_asc_rom = self.sort_ascending.clone();
+        let q_rom = q_ref.clone();
+        self.window.on_on_toggle_romanized(move |en| {
+            app_rom_toggle.set(en);
+            let _ = db_rom.set_preference("show_romanized", if en { "1" } else { "0" });
+            if let Some(w) = w_rom.upgrade() {
+                w.set_show_romanized(en);
+                // Refresh library tracks and queue tracks display
+                if let Ok(tracks) = db_rom.list_tracks(app_scope_rom.get(), app_sort_rom.get(), app_asc_rom.get()) {
+                    let models = Self::convert_tracks_to_models_with_option(&tracks, en);
+                    w.set_library_tracks(ModelRc::new(VecModel::from(models)));
+                }
+                let q = q_rom.borrow();
+                Self::sync_queue_to_ui_with_option(&q, &w, en);
+            }
+        });
+
         // 21. Native Windows File Explorer - Add Music Folder Dialog
         let win_add = win_weak.clone();
         let app_scope_add = self.active_scope.clone();
         let app_sort_add = self.sort_criteria.clone();
         let app_asc_add = self.sort_ascending.clone();
+        let app_rom_add = self.show_romanized.clone();
 
         self.window.on_on_add_folder_clicked(move || {
             let win_c = win_add.clone();
             let cur_scope_ref = app_scope_add.clone();
             let cur_sort = app_sort_add.get();
             let cur_asc = app_asc_add.get();
+            let cur_rom = app_rom_add.get();
 
             std::thread::spawn(move || {
                 if let Some(folder_path) = rfd::FileDialog::new()
@@ -1151,7 +1220,7 @@ impl ShrimpMusicApp {
 
                                     // 2. Refresh library tracks
                                     if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
-                                        let models = Self::convert_tracks_to_models(&tracks);
+                                        let models = Self::convert_tracks_to_models_with_option(&tracks, cur_rom);
                                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                                     }
                                 }
@@ -1243,9 +1312,14 @@ impl ShrimpMusicApp {
         let _ = db.increment_play_count(track.id, now);
 
         if let Some(w) = window.upgrade() {
-            w.set_track_title(SharedString::from(track.title.clone()));
-            w.set_track_artist(SharedString::from(track.artist.clone()));
-            w.set_track_album(SharedString::from(track.album.clone()));
+            let rom = w.get_show_romanized();
+            let title = Self::format_text_display(&track.title, rom);
+            let artist = Self::format_text_display(&track.artist, rom);
+            let album = Self::format_text_display(&track.album, rom);
+
+            w.set_track_title(SharedString::from(title));
+            w.set_track_artist(SharedString::from(artist));
+            w.set_track_album(SharedString::from(album));
             w.set_audio_format(SharedString::from(track.format.clone()));
             w.set_bit_depth(track.bit_depth as i32);
             w.set_sample_rate(track.sample_rate as i32);

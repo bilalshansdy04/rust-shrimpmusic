@@ -450,3 +450,74 @@ fn test_artwork_downscaling() {
 
     let _ = std::fs::remove_file(thumb_file);
 }
+
+#[test]
+fn test_romanize_hangul_and_kana_search() {
+    use shrimp_music::library::romanize::{romanize_korean, romanize_japanese, romanize_text, ScriptDetector, ScriptType};
+
+    // 1. Script Detection
+    assert_eq!(ScriptDetector::detect_script("하츠투하츠"), ScriptType::Korean);
+    assert_eq!(ScriptDetector::detect_script("사쿠라"), ScriptType::Korean);
+    assert_eq!(ScriptDetector::detect_script("さくら"), ScriptType::Japanese);
+    assert_eq!(ScriptDetector::detect_script("トーキョー"), ScriptType::Japanese);
+    assert_eq!(ScriptDetector::detect_script("Taylor Swift"), ScriptType::None);
+
+    // 2. Korean Hangul -> Latin ABC
+    assert_eq!(romanize_korean("하츠투하츠"), "hacheutuhacheu");
+    assert_eq!(romanize_korean("아일릿"), "aillit");
+    assert_eq!(romanize_korean("Hearts2Hearts (하츠투하츠)"), "Hearts2Hearts (hacheutuhacheu)");
+
+    // 3. Japanese Hiragana/Katakana -> Romaji ABC
+    assert_eq!(romanize_japanese("さくら"), "sakura");
+    assert_eq!(romanize_japanese("トーキョー"), "to-kyo-");
+    assert_eq!(romanize_japanese("ちょっと"), "chotto");
+
+    // 4. Combined general romanize
+    assert_eq!(romanize_text("아일릿 (ILLIT)"), "aillit (ILLIT)");
+    assert_eq!(romanize_text("15-LOVE (하츠투하츠)"), "15-LOVE (hacheutuhacheu)");
+
+    // 5. Database search integration with Romanization
+    let db = open_memory_database().expect("Failed to open db");
+    let f_id = db.add_folder("D:\\KPop").expect("Failed to add folder");
+
+    let tr = TrackRecord {
+        id: 0,
+        folder_id: f_id,
+        path: "D:\\KPop\\song.flac".to_string(),
+        title: "하츠투하츠".to_string(),
+        artist: "아일릿 (ILLIT)".to_string(),
+        album: "Lemon Tang".to_string(),
+        album_artist: None,
+        genre: Some("K-Pop".to_string()),
+        year: Some(2024),
+        track_number: Some(1),
+        disc_number: Some(1),
+        duration_ms: 200_000,
+        sample_rate: 96000,
+        bit_depth: 24,
+        format: "FLAC".to_string(),
+        file_size: 30_000_000,
+        modified_time: 1000,
+        thumbnail_path: None,
+        has_lyrics: false,
+        play_count: 0,
+        last_played_at: None,
+        waveform: None,
+        is_active: true,
+    };
+    db.upsert_track(&tr).expect("Failed to upsert track");
+
+    // Search by Hangul directly
+    let res_hangul = SearchEngine::search(&db, "하츠").expect("Search failed");
+    assert_eq!(res_hangul.tracks.len(), 1);
+
+    // Search by Romanized query "hacheutu"
+    let res_rom = SearchEngine::search(&db, "hacheutu").expect("Search failed");
+    assert_eq!(res_rom.tracks.len(), 1);
+    assert_eq!(res_rom.tracks[0].title, "하츠투하츠");
+
+    // Search by Romanized artist "aillit"
+    let res_artist = SearchEngine::search(&db, "aillit").expect("Search failed");
+    assert_eq!(res_artist.tracks.len(), 1);
+    assert_eq!(res_artist.tracks[0].artist, "아일릿 (ILLIT)");
+}

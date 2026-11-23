@@ -80,6 +80,7 @@ export component AppWindow inherits Window {
     in property <string> scan_status_text: "Memindai folder musik...";
     in property <int> library_sort_criteria: 0;
     in property <bool> library_sort_ascending: true;
+    in property <bool> show_romanized: false;
 
     // --- Internal UI States ---
     in-out property <int> active_view: 0; // 0: Library, 1: Playlist, 2: Lyrics, 3: Queue
@@ -123,6 +124,7 @@ export component AppWindow inherits Window {
     callback on_select_device(string);
     callback on_toggle_dark_mode(bool);
     callback on_select_shuffle_style(int);
+    callback on_toggle_romanized(bool);
 
     callback on_toggle_eq(bool);
     callback on_set_eq_band(int, float);
@@ -413,6 +415,7 @@ export component AppWindow inherits Window {
             exclusive_hint: root.exclusive_hint;
             is_dark: ThemePalette.is_dark;
             shuffle_style: root.shuffle_style;
+            show_romanized: root.show_romanized;
             is_eq_enabled: root.is_eq_enabled;
             eq_bands: root.eq_bands;
             volume_balance_mode: root.volume_balance_mode;
@@ -429,6 +432,7 @@ export component AppWindow inherits Window {
                 root.on_toggle_dark_mode(dark);
             }
             select_shuffle_style(s) => { root.on_select_shuffle_style(s); }
+            toggle_romanized(en) => { root.on_toggle_romanized(en); }
             toggle_eq(en) => { root.on_toggle_eq(en); }
             set_eq_band(b, g) => { root.on_set_eq_band(b, g); }
             select_eq_preset(p) => { root.on_select_eq_preset(p); }

@@ -13,6 +13,27 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
 
+### [DONE-29 / UDAH] Fitur Deteksi Otomatis & Romanisasi (Romaji / Hangul -> Latin Abjad ABC) untuk Korea & Jepang
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
+  1. **Modul Deteksi & Romanizer Bawaan Super Cepat ([src/library/romanize.rs](file:///d:/Projects/music/rust/src/library/romanize.rs)):**
+     - **Deteksi Karakter Aksara Asing (`ScriptDetector`):** Mampu mendeteksi secara akurat karakter Hangul Korea (`U+AC00..=U+D7A3`, Jamo), Hiragana (`U+3040..=U+309F`), Katakana (`U+30A0..=U+30FF`), dan Kanji CJK tanpa dependensi library eksternal (0 KB overhead alokasi memori).
+     - **Romanisasi Hangul Korea (RR Standard):** Menggunakan formula matematika dekomposisi silabel Unicode murni (Choseong, Jungseong, Jongseong) yang berjalan dalam hitungan nanodetik. Dilengkapi penanganan asimilasi konsonan akhir (seperti konsonan ganda `ㄹ + ㄹ -> ll`, dan final `ㅅ -> t`, contoh: `아일릿 -> aillit`, `하츠투하츠 -> hacheutuhacheu`).
+     - **Romaji Jepang (Hepburn Standard):** Mengonversi Hiragana & Katakana ke huruf Latin Romaji dengan dukungan kombinasi vokal/diftong (*yoon* seperti `きょ kyo`, `しゃ sha`, `cha`), konsonan ganda sokuon (`っ/ッ` seperti `chotto`), pemanjang bunyi chouonpu (`ー` seperti `トーキョー -> to-kyo-`), dan kombinasi modern (`ティ ti`, `ファ fa`, `ヴ va`).
+  2. **Pengaturan & Sakelar di Pengaturan ([ui/views/settings.slint](file:///d:/Projects/music/rust/ui/views/settings.slint) & [src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs)):**
+     - Menghadirkan pengaturan **"ROMANISASI TEKS (KOREA & JEPANG)"** dengan kartu sakelar interaktif **"Konversi ke Huruf Latin (ABC)"**.
+     - Preferensi pengguna disimpan secara permanen di SQLite (`show_romanized`). Secara default langsung aktif (`true`) sehingga judul/artis Korea & Jepang langsung tampil dalam huruf abjad Latin yang mudah dibaca.
+  3. **Penyajian di Daftar Lagu, Antrean, Now Playing, dan Mesin Pencari ([src/library/search.rs](file:///d:/Projects/music/rust/src/library/search.rs)):**
+     - Daftar lagu pustaka (`library_tracks`), antrean pemutar (`queue_items`), dan kartu Now Playing menyajikan teks yang telah diromanisasi ke abjad Latin ABC saat opsi aktif.
+     - Mesin pencari SQLite (`SearchEngine`) diperkaya dengan pencocokan dwiarah: pengguna dapat mencari lagu menggunakan huruf Hangul/Kana aslinya (misal `하츠`) atau mengetik ejaan Latin abjadnya (misal `hacheutu` atau `aillit`), dan lagu langsung ditemukan secara instan.
+- **Hasil Pengujian:**
+  - 4 unit test di `src/library/romanize.rs` lulus 100%.
+  - Integration test `test_romanize_hangul_and_kana_search` di [tests/fase2_test.rs](file:///d:/Projects/music/rust/tests/fase2_test.rs) lulus 100%.
+  - Seluruh rangkaian test suite (`fase2_test`, `audio_test`, `fase3_test`, `fase4_test`) lulus 100% tanpa error.
+  - Kompilasi `cargo build --release` sukses bersih tanpa error.
+
+---
+
 ### [DONE-28 / UDAH] Perbaikan Interaktivitas Sakelar Folder Pustaka & Pemindaian Ulang (Rescan/Reload) Real-Time
 - **Udah diperbaiki tanggal 11/23/2026**
 - **Detail Implementasi:**
