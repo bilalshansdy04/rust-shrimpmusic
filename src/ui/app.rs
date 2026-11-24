@@ -554,9 +554,10 @@ impl ShrimpMusicApp {
         self.window.on_on_track_double_clicked(move |id| {
             if let Ok(Some(track)) = db9.get_track_by_id(id as i64) {
                 let mut q = q9.borrow_mut();
-                // Build queue strictly from the current active folder scope and current sort order!
-                // If user is currently in a specific folder, only tracks from THAT folder enter the queue.
-                let scope = app_scope_play.get();
+                // Build queue strictly from the current active folder scope (or the track's folder) and sort order!
+                // If user is currently in a specific folder, use that scope.
+                // If in "Semua Folder", isolate queue to only songs in this track's specific folder!
+                let scope = app_scope_play.get().or(Some(track.folder_id));
                 let sort = app_sort_play.get();
                 let asc = app_asc_play.get();
 
@@ -564,7 +565,7 @@ impl ShrimpMusicApp {
                     if let Some(idx) = current_view_tracks.iter().position(|t| t.id == id as i64) {
                         q.set_items(current_view_tracks, Some(idx));
                     } else {
-                        // Fallback: if not found in current view, play track and set single
+                        // Fallback: if not found in folder view, play track and set single
                         q.set_items(vec![track.clone()], Some(0));
                     }
                 }
