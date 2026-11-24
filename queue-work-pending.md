@@ -13,6 +13,38 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
 
+### [DONE-32 / UDAH] Dukungan Pembacaan Kanji Jepang Penuh (Kakasi) & Pengaturan Ruang Lingkup Konversi (Judul, Artis, Lirik)
+- **Udah diperbaiki tanggal 11/24/2026**
+- **Detail Implementasi:**
+  1. **Konversi Kanji Jepang ke Romaji (`kakasi`):**
+     - Mengintegrasikan mesin kamus KANJI-Kana-Simple-Inverter (`kakasi`) pada [src/library/romanize.rs](file:///d:/Projects/music/rust/src/library/romanize.rs).
+     - Kanji majemuk pada lirik maupun judul lagu (seperti `甘い外側 苦い内側` -> `amai sotogawa nigai uchigawa`, `触れる距離` -> `fureru kyori`) kini terkonversi penuh ke huruf Romaji Latin tanpa meninggalkan karakter CJK yang belum terbaca.
+  2. **Pengaturan Ruang Lingkup Konversi Granular di UI ([ui/views/settings.slint](file:///d:/Projects/music/rust/ui/views/settings.slint)):**
+     - Di bawah sakelar master **"Konversi ke Huruf Latin (ABC)"**, kini tersedia 3 opsi sakelar mandiri:
+       - **Judul Musik (Track Title)**: Mengaktifkan/menonaktifkan romanisasi judul lagu di pustaka, antrean, pencarian, dan panggung Now Playing.
+       - **Nama Artis / Penyanyi**: Mengaktifkan/menonaktifkan romanisasi nama artis.
+       - **Lirik Lagu (Lyrics)**: Mengaktifkan/menonaktifkan romanisasi pada baris lirik lagu yang sedang berputar.
+     - Preferensi disimpan permanen di SQLite (`romanize_title`, `romanize_artist`, `romanize_lyrics`) dan merespon secara real-time seketika sakelar digeser.
+- **Hasil Pengujian:**
+  - Unit test `test_general_romanize` dan seluruh test suite lulus (`cargo test`).
+  - Build rilis terkompilasi optimal tanpa warning.
+
+---
+
+### [DONE-31 / UDAH] Model Antrean Linear (1:1 Match Visual Antrean & Next/Previous) serta Romanisasi Lirik Real-Time
+- **Udah diperbaiki tanggal 11/23/2026**
+- **Detail Implementasi:**
+  1. **Linear Playback Queue Architecture ([src/audio/queue.rs](file:///d:/Projects/music/rust/src/audio/queue.rs) & [ui/views/queue.slint](file:///d:/Projects/music/rust/ui/views/queue.slint)):**
+     - Memperbaiki ketidaksesuaian urutan antrean saat tombol Next ditekan.
+     - Lagu yang sedang aktif selalu dipin pada index 0, dan daftar "Antrean Berikutnya" selalu berurutan linear (index 1, 2, 3...).
+     - Tombol Next selalu memutar lagu urutan pertama di daftar antrean berikutnya secara konsisten dan akurat.
+  2. **Romanisasi Lirik Terkoneksi Real-Time ([src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs)):**
+     - Setiap baris lirik tersinkronisasi otomatis diromanisasikan sesuai preferensi pengguna.
+- **Hasil Pengujian:**
+  - Lulus seluruh unit test di `tests/fase2_test.rs`.
+
+---
+
 ### [DONE-30 / UDAH] Peningkatan Anti-Aliasing Artwork Lanczos3 (SIMD fast_image_resize) & Konsistensi Tombol Next/Previous Antrean (Queue)
 - **Udah diperbaiki tanggal 11/23/2026**
 - **Detail Implementasi:**
