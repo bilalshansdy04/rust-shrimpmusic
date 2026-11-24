@@ -26,6 +26,9 @@ export component SettingsDrawer inherits Rectangle {
     in property <bool> is_dark: true;
     in property <int> shuffle_style: 0;
     in property <bool> show_romanized: false;
+    in property <bool> romanize_title: true;
+    in property <bool> romanize_artist: true;
+    in property <bool> romanize_lyrics: true;
 
     // EQ properties
     in property <bool> is_eq_enabled: false;
@@ -42,6 +45,7 @@ export component SettingsDrawer inherits Rectangle {
     callback toggle_dark_mode(bool);
     callback select_shuffle_style(int);
     callback toggle_romanized(bool);
+    callback toggle_romanize_scope(int, bool); // 0: Title, 1: Artist, 2: Lyrics
 
     callback toggle_eq(bool);
     callback set_eq_band(int, float);
@@ -957,50 +961,220 @@ export component SettingsDrawer inherits Rectangle {
                         border-width: 1px;
                         border-color: ThemePalette.border_subtle;
 
-                        HorizontalLayout {
+                        VerticalLayout {
                             padding: 12px;
-                            alignment: space-between;
+                            spacing: 12px;
 
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 2px;
-                                width: 75%;
+                            // Master Switch
+                            HorizontalLayout {
+                                alignment: space-between;
 
-                                Text {
-                                    text: "Konversi ke Huruf Latin (ABC)";
-                                    font-size: 12px;
-                                    font-weight: 600;
-                                    color: ThemePalette.text_primary;
+                                VerticalLayout {
+                                    alignment: center;
+                                    spacing: 2px;
+                                    width: 75%;
+
+                                    Text {
+                                        text: "Konversi ke Huruf Latin (ABC)";
+                                        font-size: 12px;
+                                        font-weight: 600;
+                                        color: ThemePalette.text_primary;
+                                    }
+
+                                    Text {
+                                        text: "Ubah Hangul Korea, Kana & Kanji Jepang menjadi Romaji/Latin di aplikasi.";
+                                        font-size: 10px;
+                                        color: ThemePalette.text_secondary;
+                                        wrap: word-wrap;
+                                    }
                                 }
 
-                                Text {
-                                    text: "Ubah Hangul Korea & Kana Jepang menjadi Romaji/Latin di daftar lagu, antrean, pencarian & lirik.";
-                                    font-size: 10px;
-                                    color: ThemePalette.text_secondary;
-                                    wrap: word-wrap;
+                                // Switch
+                                Rectangle {
+                                    width: 36px;
+                                    height: 20px;
+                                    border-radius: 10px;
+                                    background: root.show_romanized ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                                    y: (parent.height - self.height) / 2;
+
+                                    Rectangle {
+                                        x: root.show_romanized ? 18px : 2px;
+                                        y: 2px;
+                                        width: 16px;
+                                        height: 16px;
+                                        border-radius: 8px;
+                                        background: #FFFFFF;
+                                        animate x { duration: 150ms; }
+                                    }
+
+                                    TouchArea {
+                                        clicked => { root.toggle_romanized(!root.show_romanized); }
+                                    }
                                 }
                             }
 
-                            // Switch
-                            Rectangle {
-                                width: 36px;
-                                height: 20px;
-                                border-radius: 10px;
-                                background: root.show_romanized ? ThemePalette.accent_primary : ThemePalette.border_subtle;
-                                y: (parent.height - self.height) / 2;
+                            // Sub-options (Ruang Lingkup Konversi)
+                            if root.show_romanized : VerticalLayout {
+                                spacing: 8px;
 
                                 Rectangle {
-                                    x: root.show_romanized ? 18px : 2px;
-                                    y: 2px;
-                                    width: 16px;
-                                    height: 16px;
-                                    border-radius: 8px;
-                                    background: #FFFFFF;
-                                    animate x { duration: 150ms; }
+                                    height: 1px;
+                                    background: ThemePalette.border_subtle;
                                 }
 
-                                TouchArea {
-                                    clicked => { root.toggle_romanized(!root.show_romanized); }
+                                Text {
+                                    text: "RUANG LINGKUP KONVERSI:";
+                                    font-size: 10px;
+                                    font-weight: 700;
+                                    color: ThemePalette.text_muted;
+                                    letter-spacing: 0.5px;
+                                }
+
+                                // 1. Judul Musik
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    height: 28px;
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+
+                                        IconDisplay {
+                                            icon: IconSet.Music;
+                                            size: 14px;
+                                            stroke: ThemePalette.accent_primary;
+                                            stroke-width: 1.8;
+                                            y: (parent.height - self.height) / 2;
+                                        }
+
+                                        Text {
+                                            text: "Judul Musik (Track Title)";
+                                            font-size: 11px;
+                                            font-weight: 500;
+                                            color: ThemePalette.text_primary;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 32px;
+                                        height: 18px;
+                                        border-radius: 9px;
+                                        background: root.romanize_title ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                                        y: (parent.height - self.height) / 2;
+
+                                        Rectangle {
+                                            x: root.romanize_title ? 16px : 2px;
+                                            y: 2px;
+                                            width: 14px;
+                                            height: 14px;
+                                            border-radius: 7px;
+                                            background: #FFFFFF;
+                                            animate x { duration: 150ms; }
+                                        }
+
+                                        TouchArea {
+                                            clicked => { root.toggle_romanize_scope(0, !root.romanize_title); }
+                                        }
+                                    }
+                                }
+
+                                // 2. Nama Artis
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    height: 28px;
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+
+                                        IconDisplay {
+                                            icon: IconSet.Mic2;
+                                            size: 14px;
+                                            stroke: ThemePalette.accent_primary;
+                                            stroke-width: 1.8;
+                                            y: (parent.height - self.height) / 2;
+                                        }
+
+                                        Text {
+                                            text: "Nama Artis / Penyanyi";
+                                            font-size: 11px;
+                                            font-weight: 500;
+                                            color: ThemePalette.text_primary;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 32px;
+                                        height: 18px;
+                                        border-radius: 9px;
+                                        background: root.romanize_artist ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                                        y: (parent.height - self.height) / 2;
+
+                                        Rectangle {
+                                            x: root.romanize_artist ? 16px : 2px;
+                                            y: 2px;
+                                            width: 14px;
+                                            height: 14px;
+                                            border-radius: 7px;
+                                            background: #FFFFFF;
+                                            animate x { duration: 150ms; }
+                                        }
+
+                                        TouchArea {
+                                            clicked => { root.toggle_romanize_scope(1, !root.romanize_artist); }
+                                        }
+                                    }
+                                }
+
+                                // 3. Lirik Lagu
+                                HorizontalLayout {
+                                    alignment: space-between;
+                                    height: 28px;
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+
+                                        IconDisplay {
+                                            icon: IconSet.AlignLeft;
+                                            size: 14px;
+                                            stroke: ThemePalette.accent_primary;
+                                            stroke-width: 1.8;
+                                            y: (parent.height - self.height) / 2;
+                                        }
+
+                                        Text {
+                                            text: "Lirik Lagu (Lyrics)";
+                                            font-size: 11px;
+                                            font-weight: 500;
+                                            color: ThemePalette.text_primary;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 32px;
+                                        height: 18px;
+                                        border-radius: 9px;
+                                        background: root.romanize_lyrics ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                                        y: (parent.height - self.height) / 2;
+
+                                        Rectangle {
+                                            x: root.romanize_lyrics ? 16px : 2px;
+                                            y: 2px;
+                                            width: 14px;
+                                            height: 14px;
+                                            border-radius: 7px;
+                                            background: #FFFFFF;
+                                            animate x { duration: 150ms; }
+                                        }
+
+                                        TouchArea {
+                                            clicked => { root.toggle_romanize_scope(2, !root.romanize_lyrics); }
+                                        }
+                                    }
                                 }
                             }
                         }

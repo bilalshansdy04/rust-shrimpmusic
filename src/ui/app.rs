@@ -31,6 +31,9 @@ pub struct ShrimpMusicApp {
     sort_criteria: Cell<SortCriteria>,
     sort_ascending: Cell<bool>,
     show_romanized: Cell<bool>,
+    romanize_title: Cell<bool>,
+    romanize_artist: Cell<bool>,
+    romanize_lyrics: Cell<bool>,
     last_lyrics_scroll_time: Rc<Cell<Option<Instant>>>,
     _timer: slint::Timer,
     win_volume: crate::audio::WindowsVolumeController,
@@ -143,9 +146,33 @@ impl ShrimpMusicApp {
             .map(|s| s == "1" || s == "true")
             .unwrap_or(true); // Default true so Korean/Japanese songs instantly show Romanized!
 
+        let romanize_title = db
+            .get_preference("romanize_title")
+            .ok()
+            .flatten()
+            .map(|s| s != "0")
+            .unwrap_or(true);
+
+        let romanize_artist = db
+            .get_preference("romanize_artist")
+            .ok()
+            .flatten()
+            .map(|s| s != "0")
+            .unwrap_or(true);
+
+        let romanize_lyrics = db
+            .get_preference("romanize_lyrics")
+            .ok()
+            .flatten()
+            .map(|s| s != "0")
+            .unwrap_or(true);
+
         window.set_library_sort_criteria(sort_criteria.to_i32());
         window.set_library_sort_ascending(sort_ascending);
         window.set_show_romanized(show_romanized);
+        window.set_romanize_title(romanize_title);
+        window.set_romanize_artist(romanize_artist);
+        window.set_romanize_lyrics(romanize_lyrics);
 
         let app = Self {
             window,
@@ -158,6 +185,9 @@ impl ShrimpMusicApp {
             sort_criteria: Cell::new(sort_criteria),
             sort_ascending: Cell::new(sort_ascending),
             show_romanized: Cell::new(show_romanized),
+            romanize_title: Cell::new(romanize_title),
+            romanize_artist: Cell::new(romanize_artist),
+            romanize_lyrics: Cell::new(romanize_lyrics),
             last_lyrics_scroll_time,
             _timer: timer,
             win_volume,
@@ -291,6 +321,15 @@ impl ShrimpMusicApp {
     }
 
     pub fn convert_tracks_to_models_with_option(tracks: &[TrackRecord], romanize: bool) -> Vec<TrackItemModel> {
+        Self::convert_tracks_to_models_detailed(tracks, romanize, true, true)
+    }
+
+    pub fn convert_tracks_to_models_detailed(
+        tracks: &[TrackRecord],
+        romanize_master: bool,
+        romanize_title: bool,
+        romanize_artist: bool,
+    ) -> Vec<TrackItemModel> {
         tracks
             .iter()
             .map(|t| {
@@ -298,9 +337,9 @@ impl ShrimpMusicApp {
                 let mins = duration_sec / 60;
                 let secs = duration_sec % 60;
 
-                let title = Self::format_text_display(&t.title, romanize);
-                let artist = Self::format_text_display(&t.artist, romanize);
-                let album = Self::format_text_display(&t.album, romanize);
+                let title = Self::format_text_display(&t.title, romanize_master && romanize_title);
+                let artist = Self::format_text_display(&t.artist, romanize_master && romanize_artist);
+                let album = Self::format_text_display(&t.album, romanize_master && romanize_title);
 
                 TrackItemModel {
                     id: t.id as i32,
@@ -321,15 +360,17 @@ impl ShrimpMusicApp {
         let sort = self.sort_criteria.get();
         let asc = self.sort_ascending.get();
         let rom = self.show_romanized.get();
+        let rom_title = self.romanize_title.get();
+        let rom_artist = self.romanize_artist.get();
 
         if let Ok(tracks) = self.db.list_tracks(scope, sort, asc) {
-            let models = Self::convert_tracks_to_models_with_option(&tracks, rom);
+            let models = Self::convert_tracks_to_models_detailed(&tracks, rom, rom_title, rom_artist);
 
             let mut q = self.queue.borrow_mut();
             if q.is_empty() {
                 q.set_items(tracks, None);
             }
-            Self::sync_queue_to_ui_with_option(&q, &self.window, rom);
+            Self::sync_queue_to_ui_detailed(&q, &self.window, rom, rom_title, rom_artist);
 
             self.window.set_library_tracks(ModelRc::new(VecModel::from(models)));
         }
@@ -356,11 +397,28 @@ impl ShrimpMusicApp {
     }
 
     fn sync_queue_to_ui(queue: &PlaybackQueue, window: &AppWindow) {
-        Self::sync_queue_to_ui_with_option(queue, window, window.get_show_romanized())
+        Self::sync_queue_to_ui_detailed(
+            queue,
+            window,
+            window.get_show_romanized(),
+            window.get_romanize_title(),
+            window.get_romanize_artist(),
+        )
     }
 
-    fn sync_queue_to_ui_with_option(queue: &PlaybackQueue, window: &AppWindow, romanize: bool) {
-        let models = Self::convert_tracks_to_models_with_option(queue.items(), romanize);
+    fn sync_queue_to_ui_detailed(
+        queue: &PlaybackQueue,
+        window: &AppWindow,
+        romanize_master: bool,
+        romanize_title: bool,
+        romanize_artist: bool,
+    ) {
+        let models = Self::convert_tracks_to_models_detailed(
+            queue.items(),
+            romanize_master,
+            romanize_title,
+            romanize_artist,
+        );
         window.set_queue_items(ModelRc::new(VecModel::from(models)));
         if let Some(idx) = queue.current_index() {
             window.set_active_queue_index(idx as i32);
@@ -1065,40 +1123,44 @@ impl ShrimpMusicApp {
         let db_rom = db.clone();
         let w_rom = win_weak.clone();
         let app_rom_toggle = self.show_romanized.clone();
+        let app_rom_title = self.romanize_title.clone();
+        let app_rom_artist = self.romanize_artist.clone();
+        let app_rom_lyrics = self.romanize_lyrics.clone();
         let app_scope_rom = self.active_scope.clone();
         let app_sort_rom = self.sort_criteria.clone();
         let app_asc_rom = self.sort_ascending.clone();
         let q_rom = q_ref.clone();
-        self.window.on_on_toggle_romanized(move |en| {
-            app_rom_toggle.set(en);
-            let _ = db_rom.set_preference("show_romanized", if en { "1" } else { "0" });
-            if let Some(w) = w_rom.upgrade() {
-                w.set_show_romanized(en);
-                // Refresh library tracks and queue tracks display
-                if let Ok(tracks) = db_rom.list_tracks(app_scope_rom.get(), app_sort_rom.get(), app_asc_rom.get()) {
-                    let models = Self::convert_tracks_to_models_with_option(&tracks, en);
+
+        let refresh_ui_romanization = {
+            let db = db_rom.clone();
+            let app_scope = app_scope_rom.clone();
+            let app_sort = app_sort_rom.clone();
+            let app_asc = app_asc_rom.clone();
+            let q_ref = q_rom.clone();
+            move |w: &AppWindow, en: bool, r_title: bool, r_artist: bool, r_lyrics: bool| {
+                if let Ok(tracks) = db.list_tracks(app_scope.get(), app_sort.get(), app_asc.get()) {
+                    let models = Self::convert_tracks_to_models_detailed(&tracks, en, r_title, r_artist);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                 }
-                let q = q_rom.borrow();
-                Self::sync_queue_to_ui_with_option(&q, &w, en);
+                let q = q_ref.borrow();
+                Self::sync_queue_to_ui_detailed(&q, w, en, r_title, r_artist);
 
-                // Refresh currently playing track and lyrics display
                 let playing_id = w.get_active_playing_id();
                 if playing_id > 0 {
-                    if let Ok(Some(track)) = db_rom.get_track_by_id(playing_id as i64) {
-                        let title = Self::format_text_display(&track.title, en);
-                        let artist = Self::format_text_display(&track.artist, en);
-                        let album = Self::format_text_display(&track.album, en);
+                    if let Ok(Some(track)) = db.get_track_by_id(playing_id as i64) {
+                        let title = Self::format_text_display(&track.title, en && r_title);
+                        let artist = Self::format_text_display(&track.artist, en && r_artist);
+                        let album = Self::format_text_display(&track.album, en && r_title);
                         w.set_track_title(SharedString::from(title));
                         w.set_track_artist(SharedString::from(artist));
                         w.set_track_album(SharedString::from(album));
 
-                        if let Ok(Some(lyrics_rec)) = db_rom.get_lyrics(track.id) {
+                        if let Ok(Some(lyrics_rec)) = db.get_lyrics(track.id) {
                             let line_models: Vec<LyricLineModel> = lyrics_rec
                                 .lines
                                 .iter()
                                 .map(|l| {
-                                    let text = Self::format_text_display(&l.text, en);
+                                    let text = Self::format_text_display(&l.text, en && r_lyrics);
                                     LyricLineModel {
                                         timestamp_ms: l.timestamp_ms as i32,
                                         text: SharedString::from(text),
@@ -1110,6 +1172,49 @@ impl ShrimpMusicApp {
                         }
                     }
                 }
+            }
+        };
+
+        let refresh_fn_1 = refresh_ui_romanization.clone();
+        let db_rom_1 = db_rom.clone();
+        let w_rom_1 = w_rom.clone();
+        let app_rom_title_1 = app_rom_title.clone();
+        let app_rom_artist_1 = app_rom_artist.clone();
+        let app_rom_lyrics_1 = app_rom_lyrics.clone();
+        self.window.on_on_toggle_romanized(move |en| {
+            app_rom_toggle.set(en);
+            let _ = db_rom_1.set_preference("show_romanized", if en { "1" } else { "0" });
+            if let Some(w) = w_rom_1.upgrade() {
+                w.set_show_romanized(en);
+                refresh_fn_1(&w, en, app_rom_title_1.get(), app_rom_artist_1.get(), app_rom_lyrics_1.get());
+            }
+        });
+
+        let db_rom_2 = db_rom.clone();
+        let w_rom_2 = w_rom.clone();
+        let app_rom_toggle_2 = self.show_romanized.clone();
+        self.window.on_on_toggle_romanize_scope(move |scope_type, en| {
+            match scope_type {
+                0 => {
+                    app_rom_title.set(en);
+                    let _ = db_rom_2.set_preference("romanize_title", if en { "1" } else { "0" });
+                }
+                1 => {
+                    app_rom_artist.set(en);
+                    let _ = db_rom_2.set_preference("romanize_artist", if en { "1" } else { "0" });
+                }
+                2 => {
+                    app_rom_lyrics.set(en);
+                    let _ = db_rom_2.set_preference("romanize_lyrics", if en { "1" } else { "0" });
+                }
+                _ => {}
+            }
+
+            if let Some(w) = w_rom_2.upgrade() {
+                w.set_romanize_title(app_rom_title.get());
+                w.set_romanize_artist(app_rom_artist.get());
+                w.set_romanize_lyrics(app_rom_lyrics.get());
+                refresh_ui_romanization(&w, app_rom_toggle_2.get(), app_rom_title.get(), app_rom_artist.get(), app_rom_lyrics.get());
             }
         });
 
@@ -1347,9 +1452,13 @@ impl ShrimpMusicApp {
 
         if let Some(w) = window.upgrade() {
             let rom = w.get_show_romanized();
-            let title = Self::format_text_display(&track.title, rom);
-            let artist = Self::format_text_display(&track.artist, rom);
-            let album = Self::format_text_display(&track.album, rom);
+            let rom_title = w.get_romanize_title();
+            let rom_artist = w.get_romanize_artist();
+            let rom_lyrics = w.get_romanize_lyrics();
+
+            let title = Self::format_text_display(&track.title, rom && rom_title);
+            let artist = Self::format_text_display(&track.artist, rom && rom_artist);
+            let album = Self::format_text_display(&track.album, rom && rom_title);
 
             w.set_track_title(SharedString::from(title));
             w.set_track_artist(SharedString::from(artist));
@@ -1379,7 +1488,7 @@ impl ShrimpMusicApp {
                     .lines
                     .iter()
                     .map(|l| {
-                        let text = Self::format_text_display(&l.text, rom);
+                        let text = Self::format_text_display(&l.text, rom && rom_lyrics);
                         LyricLineModel {
                             timestamp_ms: l.timestamp_ms as i32,
                             text: SharedString::from(text),

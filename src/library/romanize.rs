@@ -394,8 +394,12 @@ pub fn romanize_text(text: &str) -> String {
     // Step 1: Korean romanization for any Hangul characters
     let korean_processed = romanize_korean(text);
 
-    // Step 2: Japanese Romaji for any Hiragana / Katakana characters
-    romanize_japanese(&korean_processed)
+    // Step 2: Japanese Romaji for Kanji, Hiragana, and Katakana via Kakasi
+    // kakasi converts Kanji -> Romaji, Hiragana -> Romaji, Katakana -> Romaji
+    let japanese_processed = kakasi::convert(&korean_processed).romaji;
+
+    // Step 3: Pass through internal romanize_japanese as backup for any remaining kana nuances
+    romanize_japanese(&japanese_processed)
 }
 
 #[cfg(test)]
@@ -433,5 +437,10 @@ mod tests {
         assert_eq!(romanize_text("아일릿"), "aillit");
         assert_eq!(romanize_text("さくら"), "sakura");
         assert_eq!(romanize_text("15-LOVE (하츠투하츠)"), "15-LOVE (hacheutuhacheu)");
+        // Test Kanji from user's lyrics (甘い外側 苦い内側)
+        let kanji_lyric = "甘い外側 苦い内側";
+        let rom = romanize_text(kanji_lyric);
+        assert!(!rom.contains("甘") && !rom.contains("外") && !rom.contains("苦") && !rom.contains("内"));
+        println!("Kanji lyric rom: {}", rom);
     }
 }
