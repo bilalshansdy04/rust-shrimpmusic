@@ -35,7 +35,7 @@ export component LibraryView inherits Rectangle {
     callback select_all_tracks();
     callback clear_selection();
 
-    // Context Menu State
+    // Context Menu & Multi-selection State
     property <bool> show_context_menu: false;
     property <length> context_menu_x: 0px;
     property <length> context_menu_y: 0px;
@@ -44,6 +44,7 @@ export component LibraryView inherits Rectangle {
     property <bool> show_playlist_submenu: false;
     property <bool> show_new_playlist_input: false;
     property <string> new_playlist_name: "";
+    property <bool> is_selection_mode: false;
 
     background: transparent;
 
@@ -176,7 +177,7 @@ export component LibraryView inherits Rectangle {
             }
         }
 
-        // Sorting Sub-bar (Filter urutan: Judul, Artis, Album, Tgl Ditambahkan & Asc/Desc) + Multi-Selection Tools
+        // Sorting Sub-bar (Filter urutan: Judul, Artis, Album, Tgl Ditambahkan & Asc/Desc) + Selection Mode Toolbar
         if root.tracks.length > 0 : HorizontalLayout {
             height: 28px;
             alignment: space-between;
@@ -185,114 +186,145 @@ export component LibraryView inherits Rectangle {
                 spacing: 8px;
                 alignment: start;
 
-                // Select All / Clear Selection Button
-                Rectangle {
-                    width: root.selected_count > 0 ? 130px : 100px;
-                    height: 26px;
-                    border-radius: 6px;
-                    background: sel_btn_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
-                    border-width: 1px;
-                    border-color: root.selected_count > 0 ? ThemePalette.accent_primary : ThemePalette.border_subtle;
+                // Selection toolbar is only shown when selection mode is activated!
+                if root.is_selection_mode : HorizontalLayout {
+                    spacing: 8px;
 
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 6px;
+                    // Select All / Clear Selection Button
+                    Rectangle {
+                        width: 125px;
+                        height: 26px;
+                        border-radius: 6px;
+                        background: sel_btn_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
+                        border-width: 1px;
+                        border-color: root.selected_count > 0 ? ThemePalette.accent_primary : ThemePalette.border_subtle;
 
-                        IconDisplay {
-                            icon: root.selected_count > 0 ? IconSet.CheckSquare : IconSet.Square;
-                            size: 13px;
-                            stroke: root.selected_count > 0 ? ThemePalette.accent_primary : ThemePalette.text_muted;
-                            stroke-width: 1.8;
-                            y: (parent.height - self.height) / 2;
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 6px;
+
+                            IconDisplay {
+                                icon: root.selected_count > 0 ? IconSet.CheckSquare : IconSet.Square;
+                                size: 13px;
+                                stroke: root.selected_count > 0 ? ThemePalette.accent_primary : ThemePalette.text_muted;
+                                stroke-width: 1.8;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            Text {
+                                text: root.selected_count > 0 ? ("Terpilih (" + root.selected_count + ")") : "Pilih Semua";
+                                font-size: 11px;
+                                font-weight: 600;
+                                color: root.selected_count > 0 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
+                                vertical-alignment: center;
+                            }
                         }
 
-                        Text {
-                            text: root.selected_count > 0 ? ("Terpilih (" + root.selected_count + ")") : "Pilih Semua";
-                            font-size: 11px;
-                            font-weight: 600;
-                            color: root.selected_count > 0 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
-                            vertical-alignment: center;
-                        }
-                    }
-
-                    sel_btn_touch := TouchArea {
-                        clicked => {
-                            if root.selected_count > 0 {
-                                root.clear_selection();
-                            } else {
-                                root.select_all_tracks();
+                        sel_btn_touch := TouchArea {
+                            clicked => {
+                                if root.selected_count > 0 {
+                                    root.clear_selection();
+                                } else {
+                                    root.select_all_tracks();
+                                }
                             }
                         }
                     }
-                }
 
-                // Batch Action: Tambah ke Antrean (jika ada terpilih)
-                if root.selected_count > 0 : Rectangle {
-                    width: 115px;
-                    height: 26px;
-                    border-radius: 6px;
-                    background: ThemePalette.accent_subtle;
-                    border-width: 1px;
-                    border-color: ThemePalette.accent_primary;
+                    // Batch Action: Tambah ke Antrean (jika ada terpilih)
+                    if root.selected_count > 0 : Rectangle {
+                        width: 110px;
+                        height: 26px;
+                        border-radius: 6px;
+                        background: ThemePalette.accent_subtle;
+                        border-width: 1px;
+                        border-color: ThemePalette.accent_primary;
 
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 6px;
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 6px;
 
-                        IconDisplay {
-                            icon: IconSet.ListPlus;
-                            size: 13px;
-                            stroke: ThemePalette.accent_primary;
-                            stroke-width: 1.8;
-                            y: (parent.height - self.height) / 2;
+                            IconDisplay {
+                                icon: IconSet.ListPlus;
+                                size: 13px;
+                                stroke: ThemePalette.accent_primary;
+                                stroke-width: 1.8;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            Text {
+                                text: "+ Ke Antrean";
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: ThemePalette.accent_primary;
+                                vertical-alignment: center;
+                            }
                         }
+
+                        TouchArea {
+                            clicked => { root.add_selected_to_queue(); }
+                        }
+                    }
+
+                    // Batch Action: Hapus Terpilih dari DB
+                    if root.selected_count > 0 : Rectangle {
+                        width: 80px;
+                        height: 26px;
+                        border-radius: 6px;
+                        background: #dc262622;
+                        border-width: 1px;
+                        border-color: #dc262666;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 6px;
+
+                            IconDisplay {
+                                icon: IconSet.Trash2;
+                                size: 13px;
+                                stroke: #ef4444;
+                                stroke-width: 1.8;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            Text {
+                                text: "Hapus";
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: #ef4444;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        TouchArea {
+                            clicked => { root.delete_selected_from_db(); }
+                        }
+                    }
+
+                    // Exit selection mode button
+                    Rectangle {
+                        width: 65px;
+                        height: 26px;
+                        border-radius: 6px;
+                        background: close_sel_t.has-hover ? ThemePalette.bg_elevated : transparent;
 
                         Text {
-                            text: "+ Ke Antrean";
+                            text: "Selesai";
                             font-size: 11px;
-                            font-weight: 700;
-                            color: ThemePalette.accent_primary;
+                            font-weight: 600;
+                            color: ThemePalette.text_muted;
+                            horizontal-alignment: center;
                             vertical-alignment: center;
-                        }
-                    }
-
-                    TouchArea {
-                        clicked => { root.add_selected_to_queue(); }
-                    }
-                }
-
-                // Batch Action: Hapus Terpilih dari DB
-                if root.selected_count > 0 : Rectangle {
-                    width: 85px;
-                    height: 26px;
-                    border-radius: 6px;
-                    background: #dc262622;
-                    border-width: 1px;
-                    border-color: #dc262666;
-
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 6px;
-
-                        IconDisplay {
-                            icon: IconSet.Trash2;
-                            size: 13px;
-                            stroke: #ef4444;
-                            stroke-width: 1.8;
-                            y: (parent.height - self.height) / 2;
+                            width: 100%;
+                            height: 100%;
                         }
 
-                        Text {
-                            text: "Hapus";
-                            font-size: 11px;
-                            font-weight: 700;
-                            color: #ef4444;
-                            vertical-alignment: center;
+                        close_sel_t := TouchArea {
+                            clicked => {
+                                root.is_selection_mode = false;
+                                root.clear_selection();
+                            }
                         }
-                    }
-
-                    TouchArea {
-                        clicked => { root.delete_selected_from_db(); }
                     }
                 }
             }
@@ -571,8 +603,8 @@ export component LibraryView inherits Rectangle {
                            (row_touch.has-hover ? ThemePalette.bg_hover : transparent));
                 border-radius: 8px;
 
-                // Col 0: Checkbox toggle for multi-selection
-                Rectangle {
+                // Col 0: Checkbox toggle for multi-selection (only when selection mode is active)
+                if root.is_selection_mode : Rectangle {
                     x: 6px;
                     y: (parent.height - self.height) / 2;
                     width: 20px;
@@ -594,9 +626,9 @@ export component LibraryView inherits Rectangle {
                     }
                 }
 
-                // Col 1: Play status or index (Fixed position x: 28px)
+                // Col 1: Play status or index (x: 28px when selection mode, or x: 10px in normal mode)
                 Rectangle {
-                    x: 28px;
+                    x: root.is_selection_mode ? 28px : 10px;
                     y: 0px;
                     width: 24px;
                     height: parent.height;
@@ -623,11 +655,11 @@ export component LibraryView inherits Rectangle {
                     }
                 }
 
-                // Col 2: Title & Artist (Strict fixed start at x: 56px, proportional width)
+                // Col 2: Title & Artist (x: 56px when selection mode, or x: 42px in normal mode)
                 VerticalLayout {
-                    x: 56px;
+                    x: root.is_selection_mode ? 56px : 42px;
                     y: 0px;
-                    width: Math.max(130px, (parent.width - 254px) * 0.50);
+                    width: Math.max(130px, (parent.width - (root.is_selection_mode ? 254px : 240px)) * 0.50);
                     height: parent.height;
                     alignment: center;
                     spacing: 2px;
@@ -650,7 +682,7 @@ export component LibraryView inherits Rectangle {
 
                 // Col 3: Album (Strict fixed start at same pixel on all rows)
                 VerticalLayout {
-                    x: 56px + Math.max(130px, (parent.width - 254px) * 0.50) + 14px;
+                    x: (root.is_selection_mode ? 56px : 42px) + Math.max(130px, (parent.width - (root.is_selection_mode ? 254px : 240px)) * 0.50) + 14px;
                     y: 0px;
                     width: Math.max(80px, (parent.width - 124px) - self.x);
                     height: parent.height;
@@ -974,7 +1006,44 @@ export component LibraryView inherits Rectangle {
 
                 Rectangle { height: 1px; background: ThemePalette.border_subtle; }
 
-                // 4. Delete track from Database
+                // 4. Mode Pilih Beberapa Lagu (Multi-Select)
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: select_mode_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 8px;
+                        alignment: start;
+
+                        IconDisplay {
+                            icon: IconSet.CheckSquare;
+                            size: 14px;
+                            stroke: ThemePalette.text_secondary;
+                            stroke-width: 2.0;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        Text {
+                            text: "Pilih Beberapa Lagu";
+                            font-size: 12px;
+                            color: ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    select_mode_t := TouchArea {
+                        clicked => {
+                            root.show_context_menu = false;
+                            root.is_selection_mode = true;
+                            root.toggle_select_track(root.context_track_id);
+                        }
+                    }
+                }
+
+                // 5. Delete track from Database
                 Rectangle {
                     height: 32px;
                     border-radius: 4px;
