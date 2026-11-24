@@ -13,6 +13,39 @@ Dokumen ini mencatat seluruh daftar temuan, evaluasi UX/UI, dan perbaikan fitur 
 
 ## 🛠️ Catatan Riwayat Perbaikan (Selesai)
 
+### [DONE-33 / UDAH] Eliminasi Audio Stuttering FLAC di Background & Isolasi Total Cakupan Folder (Queue & Sort Filter)
+- **Udah diperbaiki tanggal 11/24/2026**
+- **Detail Implementasi:**
+  1. **Solusi Audio Lag / Stuttering saat Aplikasi Berjalan di Background:**
+     - **Penyebab:** Pada Windows, saat jendela aplikasi diminimalkan atau kehilangan fokus, penjadwal OS menurunkan prioritas thread UI dan worker. Buffer default sebelumnya ($2048\text{ frames} \approx 45\text{ ms}$) terlalu mepet sehingga jika terjadi *context-switch* atau I/O latency FLAC, buffer WASAPI mengalami *buffer under-run* yang terdengar sebagai suara patah-patah/stutter.
+     - **Solusi Zero-Lag Bit-Perfect:**
+       - Di [src/audio/wasapi_engine.rs](file:///d:/Projects/music/rust/src/audio/wasapi_engine.rs), durasi buffer render perangkat dinaikkan ke $100\text{ ms}$ (`buffer_duration_hns: 1_000_000`).
+       - Di [src/audio/player.rs](file:///d:/Projects/music/rust/src/audio/player.rs), preload buffer dekoder Symphonia ditingkatkan hingga $16.384\text{ frames}$ ($\sim 350\text{ ms}$ pada 44.1/48 kHz atau $\sim 170\text{ ms}$ pada 96 kHz Hi-Res).
+       - Musik FLAC kini berputar mulus tanpa lag di background tanpa mengubah bit audio asli (*100% bit-perfect*).
+  2. **Isolasi Folder Scope (Filter Urutan & Antrean Pemutaran):**
+     - **Penyebab:** Saat memutar lagu di folder tertentu (misal Folder ke-2), `on_track_double_clicked` sebelumnya mengisi antrean default dengan seluruh lagu pustaka (`list_tracks(None)`).
+     - **Solusi:** Di [src/ui/app.rs](file:///d:/Projects/music/rust/src/ui/app.rs), antrean dibangun secara tegas dari folder yang sedang aktif (`app_scope.get()`). Lagu di antrean dan filter urutan kini 100% terisolasi sesuai folder yang dipilih pengguna tanpa bercampur dengan folder lain.
+
+---
+
+### [DONE-34 / UDAH] Context Menu Klik-Kanan Mirip Spotify & Fitur Multi-Selection (Pilih Semua, Tambah ke Antrean, Playlist, Hapus DB)
+- **Udah diperbaiki tanggal 11/24/2026**
+- **Detail Implementasi:**
+  1. **Context Menu Klik Kanan Interaktif:**
+     - Menghadirkan menu konteks klik-kanan mengambang ala Spotify di [ui/views/library.slint](file:///d:/Projects/music/rust/ui/views/library.slint).
+     - Fitur yang berfungsi langsung:
+       - **Putar Lagu**: Memutar lagu langsung.
+       - **Tambahkan ke Antrean**: Menambahkan lagu ke antrean pemutaran seketika (`append_tracks`).
+       - **Tambahkan ke Playlist**: Submenu interaktif daftar playlist yang ada + opsi membuat playlist baru secara instan.
+       - **Hapus Lagu dari Pustaka**: Menghapus track dari database SQLite secara permanen (`delete_track`).
+  2. **Fitur Multi-Selection & Batch Toolbar:**
+     - Checkbox seleksi pada setiap baris lagu.
+     - Tombol toolbar cerdas: **"Pilih Semua"** / **"Terpilih (N)"**, **"+ Ke Antrean"**, dan **"Hapus"**.
+- **Hasil Pengujian:**
+  - Build rilis berhasil dikompilasi secara optimal tanpa warning.
+
+---
+
 ### [DONE-32 / UDAH] Dukungan Pembacaan Kanji Jepang Penuh (Kakasi) & Pengaturan Ruang Lingkup Konversi (Judul, Artis, Lirik)
 - **Udah diperbaiki tanggal 11/24/2026**
 - **Detail Implementasi:**
