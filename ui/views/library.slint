@@ -718,8 +718,8 @@ export component LibraryView inherits Rectangle {
                             root.context_track_id = track.id;
                             root.context_track_title = track.title;
                             // Clamp context menu popup position
-                            root.context_menu_x = Math.min(parent.width - 240px, Math.max(10px, self.mouse-x + self.x));
-                            root.context_menu_y = Math.min(parent.height - 280px, Math.max(10px, self.mouse-y + 100px));
+                            root.context_menu_x = Math.min(root.width - 250px, Math.max(10px, self.mouse-x + 40px));
+                            root.context_menu_y = Math.min(root.height - 300px, Math.max(10px, (index * 52px) + 70px));
                             root.show_playlist_submenu = false;
                             root.show_new_playlist_input = false;
                             root.show_context_menu = true;
@@ -746,7 +746,7 @@ export component LibraryView inherits Rectangle {
         Rectangle {
             x: root.context_menu_x;
             y: root.context_menu_y;
-            width: 230px;
+            width: 240px;
             border-radius: 8px;
             background: ThemePalette.bg_elevated;
             border-width: 1px;
@@ -760,7 +760,7 @@ export component LibraryView inherits Rectangle {
 
                 // Track header
                 HorizontalLayout {
-                    height: 24px;
+                    height: 26px;
                     padding-left: 8px;
                     padding-right: 8px;
                     Text {
