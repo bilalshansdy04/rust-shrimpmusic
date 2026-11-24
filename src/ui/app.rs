@@ -554,21 +554,47 @@ impl ShrimpMusicApp {
         self.window.on_on_track_double_clicked(move |id| {
             if let Ok(Some(track)) = db9.get_track_by_id(id as i64) {
                 let mut q = q9.borrow_mut();
-                // Build queue strictly from the current active folder scope (or the track's folder) and sort order!
-                // If user is currently in a specific folder, use that scope.
-                // If in "Semua Folder", isolate queue to only songs in this track's specific folder!
-                let scope = app_scope_play.get().or(Some(track.folder_id));
-                let sort = app_sort_play.get();
-                let asc = app_asc_play.get();
+                let mut queue_tracks = Vec::new();
+                let mut start_idx = 0;
 
-                if let Ok(current_view_tracks) = db9.list_tracks(scope, sort, asc) {
-                    if let Some(idx) = current_view_tracks.iter().position(|t| t.id == id as i64) {
-                        q.set_items(current_view_tracks, Some(idx));
-                    } else {
-                        // Fallback: if not found in folder view, play track and set single
-                        q.set_items(vec![track.clone()], Some(0));
+                // Cek konteks tampilan: apakah user sedang berada di dalam Playlist View?
+                if let Some(w) = w9.upgrade() {
+                    let active_view = w.get_active_view();
+                    let sel_pl_id = w.get_selected_playlist_id();
+
+                    if active_view == 1 && sel_pl_id >= 0 {
+                        // User berada di dalam playlist! Bangun antrean HANYA dari lagu-lagu di playlist ini
+                        if let Ok(pl_items) = db9.get_playlist_tracks(sel_pl_id as i64) {
+                            let pl_tracks: Vec<TrackRecord> = pl_items.into_iter().map(|item| item.track).collect();
+                            if let Some(idx) = pl_tracks.iter().position(|t| t.id == id as i64) {
+                                start_idx = idx;
+                            }
+                            queue_tracks = pl_tracks;
+                        }
                     }
                 }
+
+                // Jika bukan dari playlist view, gunakan logika folder scope perpustakaan
+                if queue_tracks.is_empty() {
+                    let scope = app_scope_play.get().or(Some(track.folder_id));
+                    let sort = app_sort_play.get();
+                    let asc = app_asc_play.get();
+
+                    if let Ok(current_view_tracks) = db9.list_tracks(scope, sort, asc) {
+                        if let Some(idx) = current_view_tracks.iter().position(|t| t.id == id as i64) {
+                            start_idx = idx;
+                        }
+                        queue_tracks = current_view_tracks;
+                    }
+                }
+
+                if queue_tracks.is_empty() {
+                    queue_tracks = vec![track.clone()];
+                    start_idx = 0;
+                }
+
+                q.set_items(queue_tracks, Some(start_idx));
+
                 if let Some(w) = w9.upgrade() {
                     Self::sync_queue_to_ui(&q, &w);
                 }
