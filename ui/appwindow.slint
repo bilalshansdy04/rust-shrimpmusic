@@ -124,6 +124,7 @@ export component AppWindow inherits Window {
     callback on_clear_queue();
 
     callback on_create_playlist(string);
+    callback on_create_playlist_and_add_track(string, int);
     callback on_rename_playlist(int, string);
     callback on_delete_playlist(int);
     callback on_play_playlist(int);
@@ -361,7 +362,7 @@ export component AppWindow inherits Window {
                         add_selected_to_queue => { root.on_add_selected_to_queue(); }
                         delete_track_from_db(id) => { root.on_delete_track_from_db(id); }
                         delete_selected_from_db => { root.on_delete_selected_from_db(); }
-                        create_playlist_with_tracks(name) => { root.on_create_playlist(name); }
+                        create_playlist_with_tracks(name, t_id) => { root.on_create_playlist_and_add_track(name, t_id); }
                         toggle_select_track(id) => { root.on_toggle_select_track(id); }
                         select_all_tracks => { root.on_select_all_tracks(); }
                         clear_selection => { root.on_clear_selection(); }

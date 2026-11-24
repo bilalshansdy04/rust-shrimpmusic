@@ -673,6 +673,22 @@ impl ShrimpMusicApp {
             }
         });
 
+        let db_pl_create_add = db.clone();
+        let w_pl_create_add = win_weak.clone();
+        self.window.on_on_create_playlist_and_add_track(move |name, track_id| {
+            let name_str = name.trim().to_string();
+            if !name_str.is_empty() {
+                if let Ok(pl_id) = db_pl_create_add.create_playlist(&name_str, None, None) {
+                    if track_id >= 0 {
+                        let _ = db_pl_create_add.add_track_to_playlist(pl_id, track_id as i64);
+                    }
+                    if let Some(w) = w_pl_create_add.upgrade() {
+                        Self::sync_playlists_to_ui(&db_pl_create_add, &w);
+                    }
+                }
+            }
+        });
+
         let db_pl_rename = db.clone();
         let w_pl_rename = win_weak.clone();
         self.window.on_on_rename_playlist(move |pl_id, new_name| {

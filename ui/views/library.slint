@@ -30,7 +30,7 @@ export component LibraryView inherits Rectangle {
     callback add_selected_to_queue();
     callback delete_track_from_db(int);
     callback delete_selected_from_db();
-    callback create_playlist_with_tracks(string);
+    callback create_playlist_with_tracks(string, int);
     callback toggle_select_track(int);
     callback select_all_tracks();
     callback clear_selection();
@@ -974,7 +974,10 @@ export component LibraryView inherits Rectangle {
 
                         new_pl_t := TouchArea {
                             clicked => {
-                                root.show_new_playlist_input = !root.show_new_playlist_input;
+                                root.show_context_menu = false;
+                                root.show_playlist_submenu = false;
+                                root.new_playlist_name = "";
+                                root.show_new_playlist_input = true;
                             }
                         }
                     }
@@ -1093,6 +1096,130 @@ export component LibraryView inherits Rectangle {
                         clicked => {
                             root.show_context_menu = false;
                             root.delete_track_from_db(root.context_track_id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================
+    // MODAL DIALOG: BUAT PLAYLIST BARU (DARI CONTEXT MENU)
+    // =========================================================
+    if root.show_new_playlist_input : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #000000B3;
+        z: 1000;
+
+        TouchArea {
+            // Absorb backdrop clicks
+        }
+
+        Rectangle {
+            width: 380px;
+            height: 200px;
+            border-radius: 16px;
+            background: ThemePalette.bg_surface;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+
+            VerticalLayout {
+                padding: 24px;
+                spacing: 16px;
+                alignment: space-between;
+
+                VerticalLayout {
+                    spacing: 4px;
+
+                    Text {
+                        text: "Buat Playlist Baru";
+                        font-size: 16px;
+                        font-weight: 800;
+                        color: ThemePalette.text_primary;
+                    }
+
+                    Text {
+                        text: "Masukkan nama untuk playlist baru Anda:";
+                        font-size: 11px;
+                        color: ThemePalette.text_secondary;
+                    }
+                }
+
+                Rectangle {
+                    height: 38px;
+                    background: ThemePalette.bg_elevated;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: ThemePalette.border_subtle;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+
+                        TextInput {
+                            text <=> root.new_playlist_name;
+                            font-size: 13px;
+                            color: ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+
+                    // Cancel
+                    Rectangle {
+                        width: 80px;
+                        height: 34px;
+                        border-radius: 17px;
+                        background: cancel_ctx_pl_t.has-hover ? ThemePalette.bg_elevated : transparent;
+
+                        Text {
+                            text: "Batal";
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: ThemePalette.text_secondary;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        cancel_ctx_pl_t := TouchArea {
+                            clicked => {
+                                root.show_new_playlist_input = false;
+                                root.new_playlist_name = "";
+                            }
+                        }
+                    }
+
+                    // Create & Add Track
+                    Rectangle {
+                        width: 110px;
+                        height: 34px;
+                        border-radius: 17px;
+                        background: ThemePalette.accent_primary;
+
+                        Text {
+                            text: "Buat Playlist";
+                            font-size: 12px;
+                            font-weight: 700;
+                            color: #FFFFFF;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        TouchArea {
+                            clicked => {
+                                if (root.new_playlist_name != "") {
+                                    root.create_playlist_with_tracks(root.new_playlist_name, root.context_track_id);
+                                    root.show_new_playlist_input = false;
+                                    root.new_playlist_name = "";
+                                }
+                            }
                         }
                     }
                 }
