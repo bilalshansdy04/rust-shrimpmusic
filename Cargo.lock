@@ -5159,6 +5159,7 @@ dependencies = [
  "crossbeam-channel",
  "directories",
  "fast_image_resize",
+ "i-slint-backend-testing",
  "i-slint-backend-winit",
  "image",
  "kakasi",

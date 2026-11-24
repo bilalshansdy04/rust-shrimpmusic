@@ -50,6 +50,9 @@ windows = { version = "0.62.2", features = [
     "Win32_Media_Audio_Endpoints",
 ] }
 
+[dev-dependencies]
+i-slint-backend-testing = "1.19.0"
+
 [build-dependencies]
 slint-build = "1.19.0"
 lucide-slint = "1.77.0"
