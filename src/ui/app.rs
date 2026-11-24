@@ -350,6 +350,7 @@ impl ShrimpMusicApp {
                     format: SharedString::from(t.format.clone()),
                     is_hi_res: t.sample_rate >= 88200 || t.bit_depth >= 24,
                     is_active: t.is_active,
+                    is_selected: false,
                 }
             })
             .collect()
@@ -547,17 +548,25 @@ impl ShrimpMusicApp {
         let q9 = q_ref.clone();
         let w9 = win_weak.clone();
         let db9 = db.clone();
+        let app_scope_play = self.active_scope.clone();
+        let app_sort_play = self.sort_criteria.clone();
+        let app_asc_play = self.sort_ascending.clone();
         self.window.on_on_track_double_clicked(move |id| {
             if let Ok(Some(track)) = db9.get_track_by_id(id as i64) {
                 let mut q = q9.borrow_mut();
-                if q.is_empty() {
-                    if let Ok(all_tracks) = db9.list_tracks(None, SortCriteria::Title, true) {
-                        q.set_items(all_tracks, None);
+                // Build queue strictly from the current active folder scope and current sort order!
+                // If user is currently in a specific folder, only tracks from THAT folder enter the queue.
+                let scope = app_scope_play.get();
+                let sort = app_sort_play.get();
+                let asc = app_asc_play.get();
+
+                if let Ok(current_view_tracks) = db9.list_tracks(scope, sort, asc) {
+                    if let Some(idx) = current_view_tracks.iter().position(|t| t.id == id as i64) {
+                        q.set_items(current_view_tracks, Some(idx));
+                    } else {
+                        // Fallback: if not found in current view, play track and set single
+                        q.set_items(vec![track.clone()], Some(0));
                     }
-                }
-                if let Some(idx) = q.items().iter().position(|t| t.id == id as i64) {
-                    let items = q.items().to_vec();
-                    q.set_items(items, Some(idx));
                 }
                 if let Some(w) = w9.upgrade() {
                     Self::sync_queue_to_ui(&q, &w);
@@ -591,8 +600,9 @@ impl ShrimpMusicApp {
                 }
 
                 if let Ok(tracks) = db_scope.list_tracks(target_scope, app_sort.get(), app_asc.get()) {
-                    let models = Self::convert_tracks_to_models_with_option(&tracks, app_rom.get());
+                    let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom.get(), true, true);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
+                    w.set_selected_count(0);
                 }
             }
         });
@@ -617,8 +627,9 @@ impl ShrimpMusicApp {
                 w.set_library_sort_ascending(asc);
 
                 if let Ok(tracks) = db_sort.list_tracks(app_scope_sort.get(), criteria, asc) {
-                    let models = Self::convert_tracks_to_models_with_option(&tracks, app_rom_sort.get());
+                    let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_sort.get(), true, true);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
+                    w.set_selected_count(0);
                 }
             }
         });
@@ -772,6 +783,180 @@ impl ShrimpMusicApp {
                     w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
                 }
                 Self::sync_playlists_to_ui(&db_pl_rm, &w);
+            }
+        });
+
+        // 8c. Context Menu and Batch Action Callbacks
+        let q_ctx_q = q_ref.clone();
+        let w_ctx_q = win_weak.clone();
+        let db_ctx_q = db.clone();
+        self.window.on_on_add_to_queue(move |track_id| {
+            if let Ok(Some(track)) = db_ctx_q.get_track_by_id(track_id as i64) {
+                let mut q = q_ctx_q.borrow_mut();
+                q.append_tracks(vec![track]);
+                if let Some(w) = w_ctx_q.upgrade() {
+                    Self::sync_queue_to_ui(&q, &w);
+                }
+            }
+        });
+
+        let db_ctx_pl = db.clone();
+        let w_ctx_pl = win_weak.clone();
+        self.window.on_on_add_to_playlist(move |playlist_id, track_id| {
+            let _ = db_ctx_pl.add_track_to_playlist(playlist_id as i64, track_id as i64);
+            if let Some(w) = w_ctx_pl.upgrade() {
+                Self::sync_playlists_to_ui(&db_ctx_pl, &w);
+            }
+        });
+
+        let db_ctx_del = db.clone();
+        let w_ctx_del = win_weak.clone();
+        let q_ctx_del = q_ref.clone();
+        let app_scope_del = self.active_scope.clone();
+        let app_sort_del = self.sort_criteria.clone();
+        let app_asc_del = self.sort_ascending.clone();
+        let app_rom_del = self.show_romanized.clone();
+        self.window.on_on_delete_track_from_db(move |track_id| {
+            let _ = db_ctx_del.delete_track(track_id as i64);
+            // Also remove from playback queue if present
+            let mut q = q_ctx_del.borrow_mut();
+            if let Some(pos) = q.items().iter().position(|t| t.id == track_id as i64) {
+                q.remove_at(pos);
+            }
+            if let Some(w) = w_ctx_del.upgrade() {
+                Self::sync_queue_to_ui(&q, &w);
+                if let Ok(tracks) = db_ctx_del.list_tracks(app_scope_del.get(), app_sort_del.get(), app_asc_del.get()) {
+                    let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_del.get(), true, true);
+                    w.set_library_tracks(ModelRc::new(VecModel::from(models)));
+                }
+                Self::sync_playlists_to_ui(&db_ctx_del, &w);
+            }
+        });
+
+        // 8d. Multi-Selection Checkbox & Batch Callbacks
+        let w_sel_toggle = win_weak.clone();
+        self.window.on_on_toggle_select_track(move |track_id| {
+            if let Some(w) = w_sel_toggle.upgrade() {
+                let model = w.get_library_tracks();
+                let mut sel_count = 0;
+                for i in 0..model.row_count() {
+                    if let Some(mut tr) = model.row_data(i) {
+                        if tr.id == track_id {
+                            tr.is_selected = !tr.is_selected;
+                            model.set_row_data(i, tr.clone());
+                        }
+                        if tr.is_selected {
+                            sel_count += 1;
+                        }
+                    }
+                }
+                w.set_selected_count(sel_count);
+            }
+        });
+
+        let w_sel_all = win_weak.clone();
+        self.window.on_on_select_all_tracks(move || {
+            if let Some(w) = w_sel_all.upgrade() {
+                let model = w.get_library_tracks();
+                let total = model.row_count();
+                for i in 0..total {
+                    if let Some(mut tr) = model.row_data(i) {
+                        tr.is_selected = true;
+                        model.set_row_data(i, tr);
+                    }
+                }
+                w.set_selected_count(total as i32);
+            }
+        });
+
+        let w_sel_clear = win_weak.clone();
+        self.window.on_on_clear_selection(move || {
+            if let Some(w) = w_sel_clear.upgrade() {
+                let model = w.get_library_tracks();
+                for i in 0..model.row_count() {
+                    if let Some(mut tr) = model.row_data(i) {
+                        if tr.is_selected {
+                            tr.is_selected = false;
+                            model.set_row_data(i, tr);
+                        }
+                    }
+                }
+                w.set_selected_count(0);
+            }
+        });
+
+        let w_batch_q = win_weak.clone();
+        let db_batch_q = db.clone();
+        let q_batch_q = q_ref.clone();
+        self.window.on_on_add_selected_to_queue(move || {
+            if let Some(w) = w_batch_q.upgrade() {
+                let model = w.get_library_tracks();
+                let mut to_add = Vec::new();
+                for i in 0..model.row_count() {
+                    if let Some(tr) = model.row_data(i) {
+                        if tr.is_selected {
+                            if let Ok(Some(track)) = db_batch_q.get_track_by_id(tr.id as i64) {
+                                to_add.push(track);
+                            }
+                        }
+                    }
+                }
+                if !to_add.is_empty() {
+                    let mut q = q_batch_q.borrow_mut();
+                    q.append_tracks(to_add);
+                    Self::sync_queue_to_ui(&q, &w);
+                }
+            }
+        });
+
+        let w_batch_pl = win_weak.clone();
+        let db_batch_pl = db.clone();
+        self.window.on_on_add_selected_to_playlist(move |playlist_id| {
+            if let Some(w) = w_batch_pl.upgrade() {
+                let model = w.get_library_tracks();
+                for i in 0..model.row_count() {
+                    if let Some(tr) = model.row_data(i) {
+                        if tr.is_selected {
+                            let _ = db_batch_pl.add_track_to_playlist(playlist_id as i64, tr.id as i64);
+                        }
+                    }
+                }
+                Self::sync_playlists_to_ui(&db_batch_pl, &w);
+            }
+        });
+
+        let w_batch_del = win_weak.clone();
+        let db_batch_del = db.clone();
+        let q_batch_del = q_ref.clone();
+        let app_scope_bdel = self.active_scope.clone();
+        let app_sort_bdel = self.sort_criteria.clone();
+        let app_asc_bdel = self.sort_ascending.clone();
+        let app_rom_bdel = self.show_romanized.clone();
+        self.window.on_on_delete_selected_from_db(move || {
+            if let Some(w) = w_batch_del.upgrade() {
+                let model = w.get_library_tracks();
+                let mut del_ids = Vec::new();
+                for i in 0..model.row_count() {
+                    if let Some(tr) = model.row_data(i) {
+                        if tr.is_selected {
+                            del_ids.push(tr.id as i64);
+                        }
+                    }
+                }
+                let mut q = q_batch_del.borrow_mut();
+                for id in del_ids {
+                    let _ = db_batch_del.delete_track(id);
+                    if let Some(pos) = q.items().iter().position(|t| t.id == id) {
+                        q.remove_at(pos);
+                    }
+                }
+                Self::sync_queue_to_ui(&q, &w);
+                if let Ok(tracks) = db_batch_del.list_tracks(app_scope_bdel.get(), app_sort_bdel.get(), app_asc_bdel.get()) {
+                    let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_bdel.get(), true, true);
+                    w.set_library_tracks(ModelRc::new(VecModel::from(models)));
+                }
+                w.set_selected_count(0);
+                Self::sync_playlists_to_ui(&db_batch_del, &w);
             }
         });
 

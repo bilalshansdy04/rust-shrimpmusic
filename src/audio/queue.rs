@@ -355,6 +355,17 @@ impl PlaybackQueue {
         current_track_removed
     }
 
+    pub fn append_tracks(&mut self, tracks: Vec<TrackRecord>) {
+        if tracks.is_empty() {
+            return;
+        }
+        if self.items.is_empty() {
+            self.set_items(tracks, Some(0));
+        } else {
+            self.items.extend(tracks);
+        }
+    }
+
     fn record_history(&mut self, track_id: i64) {
         let max_history = (self.items.len() / 4).max(1).min(20);
         self.history.push_back(track_id);

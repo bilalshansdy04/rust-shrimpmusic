@@ -556,6 +556,14 @@ impl Database {
         Ok(())
     }
 
+    pub fn delete_track(&self, track_id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM playlist_tracks WHERE track_id = ?1", params![track_id])?;
+        self.conn.execute("DELETE FROM lyrics WHERE track_id = ?1", params![track_id])?;
+        self.conn.execute("DELETE FROM track_waveforms WHERE track_id = ?1", params![track_id])?;
+        self.conn.execute("DELETE FROM tracks WHERE id = ?1", params![track_id])?;
+        Ok(())
+    }
+
     pub fn get_playlist_tracks(&self, playlist_id: i64) -> Result<Vec<PlaylistTrackItem>> {
         let sql = r#"
             SELECT pt.id, pt.playlist_id, pt.track_id, pt.sort_order,
