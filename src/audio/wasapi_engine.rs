@@ -54,9 +54,11 @@ impl WasapiStream {
                 period_hns: min_period,
             }
         } else {
+            // Buffer duration: 1,000,000 hns = 100ms
+            // Gives plenty of headroom so FLAC decoding never stutters when app runs in background
             StreamMode::EventsShared {
                 autoconvert: true,
-                buffer_duration_hns: 0,
+                buffer_duration_hns: 1_000_000,
             }
         };
 

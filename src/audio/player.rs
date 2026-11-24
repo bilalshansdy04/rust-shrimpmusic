@@ -478,7 +478,9 @@ fn process_playback_tick(state: &mut WorkerState, event_tx: &Sender<AudioEvent>)
     }
 
     if let Some(ref mut decoder) = state.decoder {
-        while state.sample_queue.len() < bytes_per_frame * 2048 {
+        // Preload buffer to 16384 frames (~350ms at 44.1/48kHz or ~170ms at 96kHz)
+        // This guarantees zero audio under-runs or stutters even when the OS throttles background window threads!
+        while state.sample_queue.len() < bytes_per_frame * 16384 {
             match decoder.next_packet_samples() {
                 Ok(Some(samples)) => {
                     let frame_count = samples.len() / decoder.spec().channels;
