@@ -791,14 +791,12 @@ export component LibraryView inherits Rectangle {
             x: root.context_menu_x;
             y: root.context_menu_y;
             width: 230px;
-            height: root.show_playlist_submenu ? (210px + Math.min(180px, root.playlists.length * 28px + (root.show_new_playlist_input ? 34px : 0px))) : 190px;
             border-radius: 8px;
             background: ThemePalette.bg_elevated;
             border-width: 1px;
             border-color: ThemePalette.border_subtle;
             drop-shadow-blur: 16px;
             drop-shadow-color: #00000066;
-            clip: true;
 
             VerticalLayout {
                 padding: 6px;
