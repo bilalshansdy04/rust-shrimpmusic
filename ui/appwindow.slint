@@ -67,6 +67,9 @@ export component AppWindow inherits Window {
     in property <[TrackItemModel]> playlist_tracks: [];
     in-out property <int> selected_playlist_id: -1;
     in-out property <string> selected_playlist_name: "";
+    in property <int> playlist_sort_criteria: 0;
+    in property <bool> playlist_sort_ascending: true;
+    in-out property <string> playlist_search_query: "";
 
     in property <[FolderEntryModel]> settings_folders: [];
     in property <[OutputDeviceModel]> settings_devices: [];
@@ -132,6 +135,8 @@ export component AppWindow inherits Window {
     callback on_import_playlist();
     callback on_select_playlist(int);
     callback on_remove_track_from_playlist(int, int);
+    callback on_playlist_sort_changed(int, bool);
+    callback on_playlist_search_changed(string);
 
     callback on_toggle_folder(int, bool);
     callback on_remove_folder(int);
@@ -375,6 +380,9 @@ export component AppWindow inherits Window {
                         active_playing_id: root.active_playing_id;
                         selected_playlist_id <=> root.selected_playlist_id;
                         selected_playlist_name <=> root.selected_playlist_name;
+                        playlist_sort_criteria: root.playlist_sort_criteria;
+                        playlist_sort_ascending: root.playlist_sort_ascending;
+                        playlist_search_query <=> root.playlist_search_query;
 
                         create_playlist(name) => { root.on_create_playlist(name); }
                         rename_playlist(id, name) => { root.on_rename_playlist(id, name); }
@@ -386,6 +394,8 @@ export component AppWindow inherits Window {
                         back_to_playlists => { root.selected_playlist_id = -1; }
                         track_double_clicked(id) => { root.on_track_double_clicked(id); }
                         remove_track_from_playlist(p_id, t_id) => { root.on_remove_track_from_playlist(p_id, t_id); }
+                        playlist_sort_changed(crit, asc) => { root.on_playlist_sort_changed(crit, asc); }
+                        playlist_search_changed(q) => { root.on_playlist_search_changed(q); }
                     }
 
                     // View 2: Kinetic Lyrics View

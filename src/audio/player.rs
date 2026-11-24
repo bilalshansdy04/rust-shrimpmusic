@@ -9,7 +9,7 @@ use wasapi::initialize_mta;
 
 use super::decoder::{SymphoniaDecoder, TrackAudioSpec};
 use super::device::DeviceManager;
-use super::dsp::{convert_f32_to_bytes, DspProcessor, EqPreset, VolumeBalanceMode};
+use super::dsp::{convert_f32_to_bytes, DspProcessor, EqPreset, TargetSampleFormat, VolumeBalanceMode};
 use super::error::{AudioError, AudioResult};
 use super::wasapi_engine::WasapiStream;
 
@@ -188,6 +188,8 @@ struct WorkerState {
     current_position: Duration,
     last_position_update: Instant,
     sample_queue: Vec<u8>,
+    fade_in_remaining_frames: usize,
+    fade_in_total_frames: usize,
 }
 
 fn run_audio_worker(
@@ -208,6 +210,8 @@ fn run_audio_worker(
         current_position: Duration::ZERO,
         last_position_update: Instant::now(),
         sample_queue: Vec::new(),
+        fade_in_remaining_frames: 0,
+        fade_in_total_frames: 0,
     };
 
     let device_manager = match DeviceManager::new() {
@@ -262,11 +266,32 @@ fn run_audio_worker(
                 AudioCommand::Seek(target) => {
                     println!("[DEBUG AUDIO] Seek command received for target: {:?}", target);
                     if let Some(ref mut decoder) = state.decoder {
+                        // 1. Quick fade-out existing buffered audio if playing to prevent pop/click
+                        if let Some(ref stream) = state.stream {
+                            let bytes_per_frame = stream.bytes_per_frame();
+                            let target_fmt = stream.target_sample_format();
+                            if bytes_per_frame > 0 && !state.sample_queue.is_empty() {
+                                // Apply smooth linear fade-out to the top ~30ms of buffered samples before writing
+                                let fade_out_frames = (stream.sample_rate() as usize * 30 / 1000).max(1);
+                                let fade_out_bytes = (fade_out_frames * bytes_per_frame).min(state.sample_queue.len());
+                                if fade_out_bytes > 0 {
+                                    let mut chunk: Vec<u8> = state.sample_queue.drain(..fade_out_bytes).collect();
+                                    apply_linear_fade_out(&mut chunk, target_fmt, fade_out_frames, stream.channels() as usize);
+                                    let _ = stream.write_bytes(&chunk);
+                                }
+                            }
+                        }
+
                         match decoder.seek(target) {
                             Ok(actual) => {
                                 println!("[DEBUG AUDIO] Decoder seek succeeded, actual pos: {:?}", actual);
                                 state.current_position = actual;
                                 state.sample_queue.clear();
+                                // 2. Setup smooth fade-in for post-seek audio (~50ms)
+                                let sr = decoder.spec().sample_rate;
+                                let fade_frames = (sr as usize * 50 / 1000).max(1);
+                                state.fade_in_remaining_frames = fade_frames;
+                                state.fade_in_total_frames = fade_frames;
                                 let _ = event_tx.send(AudioEvent::Position(actual));
                             }
                             Err(e) => {
@@ -487,13 +512,31 @@ fn process_playback_tick(state: &mut WorkerState, event_tx: &Sender<AudioEvent>)
                     let frame_duration = Duration::from_secs_f64(frame_count as f64 / decoder.spec().sample_rate as f64);
                     state.current_position += frame_duration;
 
-                    let processed = match state.dsp.process_samples(samples) {
+                    let mut processed = match state.dsp.process_samples(samples) {
                         Ok(p) => p,
                         Err(e) => {
                             let _ = event_tx.send(AudioEvent::Error(format!("DSP error: {}", e)));
                             break;
                         }
                     };
+
+                    // Apply smooth fade-in after seek
+                    if state.fade_in_remaining_frames > 0 && state.fade_in_total_frames > 0 {
+                        let channels = decoder.spec().channels;
+                        let frames_in_buf = processed.len() / channels;
+                        let apply_frames = frames_in_buf.min(state.fade_in_remaining_frames);
+                        let total = state.fade_in_total_frames as f32;
+
+                        for f in 0..apply_frames {
+                            let progress = (state.fade_in_total_frames - state.fade_in_remaining_frames + f) as f32 / total;
+                            let gain = progress.clamp(0.0, 1.0);
+                            for ch in 0..channels {
+                                processed[f * channels + ch] *= gain;
+                            }
+                        }
+
+                        state.fade_in_remaining_frames = state.fade_in_remaining_frames.saturating_sub(apply_frames);
+                    }
 
                     let raw_bytes = convert_f32_to_bytes(&processed, stream.target_sample_format());
                     state.sample_queue.extend_from_slice(&raw_bytes);
@@ -546,3 +589,90 @@ fn process_playback_tick(state: &mut WorkerState, event_tx: &Sender<AudioEvent>)
         let _ = event_tx.send(AudioEvent::Position(state.current_position));
     }
 }
+
+fn apply_linear_fade_out(
+    bytes: &mut [u8],
+    format: TargetSampleFormat,
+    frames: usize,
+    channels: usize,
+) {
+    if channels == 0 || frames == 0 {
+        return;
+    }
+
+    match format {
+        TargetSampleFormat::Pcm16 => {
+            let bytes_per_sample = 2;
+            let frame_size = bytes_per_sample * channels;
+            let total_frames = (bytes.len() / frame_size).min(frames);
+            if total_frames == 0 {
+                return;
+            }
+            for f in 0..total_frames {
+                let gain = (total_frames - f) as f32 / total_frames as f32;
+                for ch in 0..channels {
+                    let offset = (f * channels + ch) * 2;
+                    if offset + 2 <= bytes.len() {
+                        let sample = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
+                        let faded = (sample as f32 * gain) as i16;
+                        let le = faded.to_le_bytes();
+                        bytes[offset] = le[0];
+                        bytes[offset + 1] = le[1];
+                    }
+                }
+            }
+        }
+        TargetSampleFormat::Pcm24In32 => {
+            let bytes_per_sample = 4;
+            let frame_size = bytes_per_sample * channels;
+            let total_frames = (bytes.len() / frame_size).min(frames);
+            if total_frames == 0 {
+                return;
+            }
+            for f in 0..total_frames {
+                let gain = (total_frames - f) as f32 / total_frames as f32;
+                for ch in 0..channels {
+                    let offset = (f * channels + ch) * 4;
+                    if offset + 4 <= bytes.len() {
+                        let sample = i32::from_le_bytes([
+                            bytes[offset],
+                            bytes[offset + 1],
+                            bytes[offset + 2],
+                            bytes[offset + 3],
+                        ]);
+                        let faded = (sample as f64 * gain as f64) as i32;
+                        let le = faded.to_le_bytes();
+                        bytes[offset..offset + 4].copy_from_slice(&le);
+                    }
+                }
+            }
+        }
+        TargetSampleFormat::Float32 => {
+            let bytes_per_sample = 4;
+            let frame_size = bytes_per_sample * channels;
+            let total_frames = (bytes.len() / frame_size).min(frames);
+            if total_frames == 0 {
+                return;
+            }
+            for f in 0..total_frames {
+                let gain = (total_frames - f) as f32 / total_frames as f32;
+                for ch in 0..channels {
+                    let offset = (f * channels + ch) * 4;
+                    if offset + 4 <= bytes.len() {
+                        let sample = f32::from_le_bytes([
+                            bytes[offset],
+                            bytes[offset + 1],
+                            bytes[offset + 2],
+                            bytes[offset + 3],
+                        ]);
+                        let faded = sample * gain;
+                        let le = faded.to_le_bytes();
+                        bytes[offset..offset + 4].copy_from_slice(&le);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+

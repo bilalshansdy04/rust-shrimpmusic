@@ -45,6 +45,7 @@ export component LibraryView inherits Rectangle {
     property <bool> show_new_playlist_input: false;
     property <string> new_playlist_name: "";
     property <bool> is_selection_mode: false;
+    property <bool> show_sort_menu: false;
 
     background: transparent;
 
@@ -341,185 +342,43 @@ export component LibraryView inherits Rectangle {
                 }
             }
 
-            HorizontalLayout {
-                spacing: 6px;
-                alignment: start;
-
-                Text {
-                    text: "Urutkan:";
-                    font-size: 11px;
-                    font-weight: 600;
-                    color: ThemePalette.text_muted;
-                    vertical-alignment: center;
-                }
-
-                // 1. Judul / Nama (SortCriteria = 0)
-                Rectangle {
-                    height: 24px;
-                    border-radius: 12px;
-                    background: root.sort_criteria == 0 ? ThemePalette.accent_subtle : (t_sort.has-hover ? ThemePalette.bg_hover : transparent);
-                    border-width: 1px;
-                    border-color: root.sort_criteria == 0 ? ThemePalette.accent_primary : transparent;
-
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        alignment: center;
-
-                        Text {
-                            text: "Nama";
-                            font-size: 11px;
-                            font-weight: root.sort_criteria == 0 ? 700 : 500;
-                            color: root.sort_criteria == 0 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
-                            vertical-alignment: center;
-                        }
-                    }
-
-                    t_sort := TouchArea {
-                        clicked => {
-                            if root.sort_criteria == 0 {
-                                root.sort_changed(0, !root.sort_ascending);
-                            } else {
-                                root.sort_changed(0, true);
-                            }
-                        }
-                    }
-                }
-
-                // 2. Artis (SortCriteria = 1)
-                Rectangle {
-                    height: 24px;
-                    border-radius: 12px;
-                    background: root.sort_criteria == 1 ? ThemePalette.accent_subtle : (a_sort.has-hover ? ThemePalette.bg_hover : transparent);
-                    border-width: 1px;
-                    border-color: root.sort_criteria == 1 ? ThemePalette.accent_primary : transparent;
-
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        alignment: center;
-
-                        Text {
-                            text: "Artis";
-                            font-size: 11px;
-                            font-weight: root.sort_criteria == 1 ? 700 : 500;
-                            color: root.sort_criteria == 1 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
-                            vertical-alignment: center;
-                        }
-                    }
-
-                    a_sort := TouchArea {
-                        clicked => {
-                            if root.sort_criteria == 1 {
-                                root.sort_changed(1, !root.sort_ascending);
-                            } else {
-                                root.sort_changed(1, true);
-                            }
-                        }
-                    }
-                }
-
-                // 3. Album (SortCriteria = 2)
-                Rectangle {
-                    height: 24px;
-                    border-radius: 12px;
-                    background: root.sort_criteria == 2 ? ThemePalette.accent_subtle : (al_sort.has-hover ? ThemePalette.bg_hover : transparent);
-                    border-width: 1px;
-                    border-color: root.sort_criteria == 2 ? ThemePalette.accent_primary : transparent;
-
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        alignment: center;
-
-                        Text {
-                            text: "Album";
-                            font-size: 11px;
-                            font-weight: root.sort_criteria == 2 ? 700 : 500;
-                            color: root.sort_criteria == 2 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
-                            vertical-alignment: center;
-                        }
-                    }
-
-                    al_sort := TouchArea {
-                        clicked => {
-                            if root.sort_criteria == 2 {
-                                root.sort_changed(2, !root.sort_ascending);
-                            } else {
-                                root.sort_changed(2, true);
-                            }
-                        }
-                    }
-                }
-
-                // 4. Tanggal Ditambahkan (SortCriteria = 5)
-                Rectangle {
-                    height: 24px;
-                    border-radius: 12px;
-                    background: root.sort_criteria == 5 ? ThemePalette.accent_subtle : (d_sort.has-hover ? ThemePalette.bg_hover : transparent);
-                    border-width: 1px;
-                    border-color: root.sort_criteria == 5 ? ThemePalette.accent_primary : transparent;
-
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        alignment: center;
-
-                        Text {
-                            text: "Tanggal Ditambahkan";
-                            font-size: 11px;
-                            font-weight: root.sort_criteria == 5 ? 700 : 500;
-                            color: root.sort_criteria == 5 ? ThemePalette.accent_primary : ThemePalette.text_secondary;
-                            vertical-alignment: center;
-                        }
-                    }
-
-                    d_sort := TouchArea {
-                        clicked => {
-                            if root.sort_criteria == 5 {
-                                root.sort_changed(5, !root.sort_ascending);
-                            } else {
-                                root.sort_changed(5, false); // Tanggal default descending (terbaru)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Direction Toggle Button (Ascending / Descending)
+            // Spotify-style Sort Dropdown Button (Replaces old multi-pill bar)
             Rectangle {
-                height: 24px;
-                border-radius: 12px;
-                background: dir_touch.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
-                border-width: 1px;
-                border-color: ThemePalette.border_subtle;
+                height: 28px;
+                border-radius: 6px;
+                background: sort_btn_touch.has-hover ? ThemePalette.bg_elevated : transparent;
 
                 HorizontalLayout {
                     padding-left: 10px;
                     padding-right: 10px;
-                    spacing: 4px;
+                    spacing: 8px;
                     alignment: center;
 
-                    IconDisplay {
-                        icon: root.sort_ascending ? IconSet.ChevronUp : IconSet.ChevronDown;
-                        size: 12px;
-                        stroke: ThemePalette.accent_primary;
-                        stroke-width: 2.5;
-                        y: (parent.height - self.height) / 2;
-                    }
-
                     Text {
-                        text: root.sort_ascending ? "Menaik (A-Z / Lama)" : "Menurun (Z-A / Baru)";
-                        font-size: 10px;
+                        text: root.sort_criteria == 0 ? "Title" :
+                             (root.sort_criteria == 1 ? "Artist" :
+                             (root.sort_criteria == 2 ? "Album" :
+                             (root.sort_criteria == 3 ? "Track Number" :
+                             (root.sort_criteria == 4 ? "Duration" :
+                             (root.sort_criteria == 5 ? "Recently added" : "Audio specs")))));
+                        font-size: 12px;
                         font-weight: 600;
                         color: ThemePalette.text_secondary;
                         vertical-alignment: center;
                     }
+
+                    IconDisplay {
+                        icon: IconSet.ListFilter;
+                        size: 14px;
+                        stroke: ThemePalette.text_secondary;
+                        stroke-width: 2.0;
+                        y: (parent.height - self.height) / 2;
+                    }
                 }
 
-                dir_touch := TouchArea {
+                sort_btn_touch := TouchArea {
                     clicked => {
-                        root.sort_changed(root.sort_criteria, !root.sort_ascending);
+                        root.show_sort_menu = !root.show_sort_menu;
                     }
                 }
             }
@@ -1220,6 +1079,248 @@ export component LibraryView inherits Rectangle {
                                     root.new_playlist_name = "";
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================
+    // SPOTIFY-STYLE SORT MENU POPUP
+    // =========================================================
+    if root.show_sort_menu : TouchArea {
+        width: 100%;
+        height: 100%;
+        z: 998;
+        clicked => { root.show_sort_menu = false; }
+
+        Rectangle {
+            x: parent.width - 200px;
+            y: 95px;
+            width: 175px;
+            border-radius: 8px;
+            background: ThemePalette.bg_elevated;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: #00000066;
+
+            VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+
+                // Header
+                Rectangle {
+                    height: 26px;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        Text {
+                            text: "Sort by";
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: ThemePalette.text_muted;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Item 0: Title
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: lib_it0_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Title";
+                            font-size: 12px;
+                            font-weight: root.sort_criteria == 0 ? 700 : 500;
+                            color: root.sort_criteria == 0 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.sort_criteria == 0 : IconDisplay {
+                            icon: root.sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    lib_it0_t := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 0 {
+                                root.sort_changed(0, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(0, true);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 1: Artist
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: lib_it1_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Artist";
+                            font-size: 12px;
+                            font-weight: root.sort_criteria == 1 ? 700 : 500;
+                            color: root.sort_criteria == 1 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.sort_criteria == 1 : IconDisplay {
+                            icon: root.sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    lib_it1_t := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 1 {
+                                root.sort_changed(1, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(1, true);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 2: Album
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: lib_it2_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Album";
+                            font-size: 12px;
+                            font-weight: root.sort_criteria == 2 ? 700 : 500;
+                            color: root.sort_criteria == 2 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.sort_criteria == 2 : IconDisplay {
+                            icon: root.sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    lib_it2_t := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 2 {
+                                root.sort_changed(2, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(2, true);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 3: Recently added (SortCriteria = 5)
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: lib_it5_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Recently added";
+                            font-size: 12px;
+                            font-weight: root.sort_criteria == 5 ? 700 : 500;
+                            color: root.sort_criteria == 5 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.sort_criteria == 5 : IconDisplay {
+                            icon: root.sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    lib_it5_t := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 5 {
+                                root.sort_changed(5, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(5, false); // Recently added default descending
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 4: Duration (SortCriteria = 4)
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: lib_it4_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Duration";
+                            font-size: 12px;
+                            font-weight: root.sort_criteria == 4 ? 700 : 500;
+                            color: root.sort_criteria == 4 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.sort_criteria == 4 : IconDisplay {
+                            icon: root.sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    lib_it4_t := TouchArea {
+                        clicked => {
+                            if root.sort_criteria == 4 {
+                                root.sort_changed(4, !root.sort_ascending);
+                            } else {
+                                root.sort_changed(4, true);
+                            }
+                            root.show_sort_menu = false;
                         }
                     }
                 }

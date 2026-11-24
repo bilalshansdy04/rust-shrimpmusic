@@ -10,6 +10,9 @@ export component PlaylistView inherits Rectangle {
     in property <int> active_playing_id: -1;
     in-out property <int> selected_playlist_id: -1;
     in-out property <string> selected_playlist_name: "";
+    in property <int> playlist_sort_criteria: 0; // 0: Custom order, 1: Title, 2: Artist, 3: Album, 4: Recently added, 5: Release date, 6: Duration
+    in property <bool> playlist_sort_ascending: true;
+    in-out property <string> playlist_search_query: "";
 
     callback create_playlist(string);
     callback rename_playlist(int, string);
@@ -21,6 +24,8 @@ export component PlaylistView inherits Rectangle {
     callback back_to_playlists();
     callback track_double_clicked(int);
     callback remove_track_from_playlist(int, int);
+    callback playlist_sort_changed(int, bool);
+    callback playlist_search_changed(string);
 
     background: transparent;
 
@@ -34,6 +39,9 @@ export component PlaylistView inherits Rectangle {
     property <bool> show_delete_modal: false;
     property <int> deleting_playlist_id: -1;
     property <string> deleting_playlist_name: "";
+
+    property <bool> is_search_expanded: false;
+    property <bool> show_sort_menu: false;
 
     VerticalLayout {
         padding: 24px;
@@ -558,6 +566,136 @@ export component PlaylistView inherits Rectangle {
             }
         }
 
+        // Inside Playlist: Sub-header Toolbar (Search in playlist + Spotify-style Sort Dropdown)
+        if root.selected_playlist_id >= 0 : HorizontalLayout {
+            height: 32px;
+            alignment: space-between;
+
+            // Left placeholder or quick info
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+            }
+
+            // Right: Search in Playlist & Spotify Sort Button
+            HorizontalLayout {
+                spacing: 12px;
+                alignment: end;
+
+                // 1. Search in Playlist (Expandable)
+                Rectangle {
+                    width: root.is_search_expanded ? 200px : 32px;
+                    height: 32px;
+                    border-radius: 16px;
+                    background: root.is_search_expanded ? ThemePalette.bg_surface : transparent;
+                    border-width: root.is_search_expanded ? 1px : 0px;
+                    border-color: ThemePalette.border_subtle;
+                    animate width { duration: 150ms; }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 6px;
+                        alignment: center;
+
+                        Rectangle {
+                            width: 16px;
+                            height: 16px;
+                            y: (parent.height - self.height) / 2;
+
+                            IconDisplay {
+                                icon: IconSet.Search;
+                                size: 14px;
+                                stroke: root.is_search_expanded ? ThemePalette.accent_primary : ThemePalette.text_secondary;
+                                stroke-width: 2.0;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+
+                        if root.is_search_expanded : TextInput {
+                            text <=> root.playlist_search_query;
+                            font-size: 11px;
+                            color: ThemePalette.text_primary;
+                            vertical-alignment: center;
+                            edited => { root.playlist_search_changed(self.text); }
+                        }
+
+                        if root.is_search_expanded && root.playlist_search_query != "" : Rectangle {
+                            width: 16px;
+                            height: 16px;
+                            border-radius: 8px;
+                            background: clear_s_t.has-hover ? ThemePalette.bg_hover : transparent;
+                            y: (parent.height - self.height) / 2;
+
+                            IconDisplay {
+                                icon: IconSet.X;
+                                size: 11px;
+                                stroke: ThemePalette.text_muted;
+                                stroke-width: 2.0;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            clear_s_t := TouchArea {
+                                clicked => {
+                                    root.playlist_search_query = "";
+                                    root.playlist_search_changed("");
+                                }
+                            }
+                        }
+                    }
+
+                    if !root.is_search_expanded : s_box_touch := TouchArea {
+                        clicked => {
+                            root.is_search_expanded = true;
+                        }
+                    }
+                }
+
+                // 2. Spotify-style Sort Dropdown Button
+                Rectangle {
+                    height: 32px;
+                    border-radius: 6px;
+                    background: sort_btn_touch.has-hover ? ThemePalette.bg_elevated : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 8px;
+                        alignment: center;
+
+                        Text {
+                            text: root.playlist_sort_criteria == 0 ? "Custom order" :
+                                 (root.playlist_sort_criteria == 1 ? "Title" :
+                                 (root.playlist_sort_criteria == 2 ? "Artist" :
+                                 (root.playlist_sort_criteria == 3 ? "Album" :
+                                 (root.playlist_sort_criteria == 4 ? "Recently added" :
+                                 (root.playlist_sort_criteria == 5 ? "Release date" : "Duration")))));
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: ThemePalette.text_secondary;
+                            vertical-alignment: center;
+                        }
+
+                        IconDisplay {
+                            icon: IconSet.ListFilter;
+                            size: 14px;
+                            stroke: ThemePalette.text_secondary;
+                            stroke-width: 2.0;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    sort_btn_touch := TouchArea {
+                        clicked => {
+                            root.show_sort_menu = !root.show_sort_menu;
+                        }
+                    }
+                }
+            }
+        }
+
         // Inside Playlist: Tracks List
         if root.selected_playlist_id >= 0 : ListView {
             for track[index] in root.playlist_tracks : Rectangle {
@@ -707,6 +845,328 @@ export component PlaylistView inherits Rectangle {
 
                 track_touch := TouchArea {
                     double-clicked => { root.track_double_clicked(track.id); }
+                }
+            }
+        }
+    }
+
+    // =========================================================
+    // SPOTIFY-STYLE SORT MENU POPUP
+    // =========================================================
+    if root.show_sort_menu : TouchArea {
+        width: 100%;
+        height: 100%;
+        z: 998;
+        clicked => { root.show_sort_menu = false; }
+
+        Rectangle {
+            x: parent.width - 200px;
+            y: 95px;
+            width: 175px;
+            border-radius: 8px;
+            background: ThemePalette.bg_elevated;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: #00000066;
+
+            VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+
+                // Header
+                Rectangle {
+                    height: 26px;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        Text {
+                            text: "Sort by";
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: ThemePalette.text_muted;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Item 0: Custom order
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it0_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Custom order";
+                            font-size: 12px;
+                            font-weight: root.playlist_sort_criteria == 0 ? 700 : 500;
+                            color: root.playlist_sort_criteria == 0 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.playlist_sort_criteria == 0 : IconDisplay {
+                            icon: root.playlist_sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    it0_t := TouchArea {
+                        clicked => {
+                            if root.playlist_sort_criteria == 0 {
+                                root.playlist_sort_changed(0, !root.playlist_sort_ascending);
+                            } else {
+                                root.playlist_sort_changed(0, true);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 1: Title
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it1_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Title";
+                            font-size: 12px;
+                            font-weight: root.playlist_sort_criteria == 1 ? 700 : 500;
+                            color: root.playlist_sort_criteria == 1 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.playlist_sort_criteria == 1 : IconDisplay {
+                            icon: root.playlist_sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    it1_t := TouchArea {
+                        clicked => {
+                            if root.playlist_sort_criteria == 1 {
+                                root.playlist_sort_changed(1, !root.playlist_sort_ascending);
+                            } else {
+                                root.playlist_sort_changed(1, true);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 2: Artist
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it2_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Artist";
+                            font-size: 12px;
+                            font-weight: root.playlist_sort_criteria == 2 ? 700 : 500;
+                            color: root.playlist_sort_criteria == 2 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.playlist_sort_criteria == 2 : IconDisplay {
+                            icon: root.playlist_sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    it2_t := TouchArea {
+                        clicked => {
+                            if root.playlist_sort_criteria == 2 {
+                                root.playlist_sort_changed(2, !root.playlist_sort_ascending);
+                            } else {
+                                root.playlist_sort_changed(2, true);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 3: Album
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it3_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Album";
+                            font-size: 12px;
+                            font-weight: root.playlist_sort_criteria == 3 ? 700 : 500;
+                            color: root.playlist_sort_criteria == 3 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.playlist_sort_criteria == 3 : IconDisplay {
+                            icon: root.playlist_sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    it3_t := TouchArea {
+                        clicked => {
+                            if root.playlist_sort_criteria == 3 {
+                                root.playlist_sort_changed(3, !root.playlist_sort_ascending);
+                            } else {
+                                root.playlist_sort_changed(3, true);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 4: Recently added
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it4_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Recently added";
+                            font-size: 12px;
+                            font-weight: root.playlist_sort_criteria == 4 ? 700 : 500;
+                            color: root.playlist_sort_criteria == 4 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.playlist_sort_criteria == 4 : IconDisplay {
+                            icon: root.playlist_sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    it4_t := TouchArea {
+                        clicked => {
+                            if root.playlist_sort_criteria == 4 {
+                                root.playlist_sort_changed(4, !root.playlist_sort_ascending);
+                            } else {
+                                root.playlist_sort_changed(4, false); // recently added default descending
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 5: Release date
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it5_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Release date";
+                            font-size: 12px;
+                            font-weight: root.playlist_sort_criteria == 5 ? 700 : 500;
+                            color: root.playlist_sort_criteria == 5 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.playlist_sort_criteria == 5 : IconDisplay {
+                            icon: root.playlist_sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    it5_t := TouchArea {
+                        clicked => {
+                            if root.playlist_sort_criteria == 5 {
+                                root.playlist_sort_changed(5, !root.playlist_sort_ascending);
+                            } else {
+                                root.playlist_sort_changed(5, false);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
+                }
+
+                // Item 6: Duration
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: it6_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        alignment: space-between;
+
+                        Text {
+                            text: "Duration";
+                            font-size: 12px;
+                            font-weight: root.playlist_sort_criteria == 6 ? 700 : 500;
+                            color: root.playlist_sort_criteria == 6 ? ThemePalette.accent_primary : ThemePalette.text_primary;
+                            vertical-alignment: center;
+                        }
+
+                        if root.playlist_sort_criteria == 6 : IconDisplay {
+                            icon: root.playlist_sort_ascending ? IconSet.ArrowUp : IconSet.ArrowDown;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.5;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    it6_t := TouchArea {
+                        clicked => {
+                            if root.playlist_sort_criteria == 6 {
+                                root.playlist_sort_changed(6, !root.playlist_sort_ascending);
+                            } else {
+                                root.playlist_sort_changed(6, true);
+                            }
+                            root.show_sort_menu = false;
+                        }
+                    }
                 }
             }
         }

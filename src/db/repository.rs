@@ -565,7 +565,41 @@ impl Database {
     }
 
     pub fn get_playlist_tracks(&self, playlist_id: i64) -> Result<Vec<PlaylistTrackItem>> {
-        let sql = r#"
+        self.get_playlist_tracks_filtered(playlist_id, None, 0, true)
+    }
+
+    pub fn get_playlist_tracks_filtered(
+        &self,
+        playlist_id: i64,
+        search_query: Option<&str>,
+        sort_criteria: i32,
+        ascending: bool,
+    ) -> Result<Vec<PlaylistTrackItem>> {
+        let dir = if ascending { "ASC" } else { "DESC" };
+        let order_clause = match sort_criteria {
+            0 => format!("pt.sort_order {}", dir), // Custom order
+            1 => format!("t.title COLLATE NOCASE {}", dir),
+            2 => format!("t.artist COLLATE NOCASE {}, t.album COLLATE NOCASE ASC, t.track_number ASC", dir),
+            3 => format!("t.album COLLATE NOCASE {}, t.disc_number ASC, t.track_number ASC", dir),
+            4 => format!("pt.id {}", dir), // Recently added to playlist
+            5 => format!("t.year {}, t.modified_time {}", dir, dir), // Release date / year
+            6 => format!("t.duration_ms {}", dir),
+            _ => format!("pt.sort_order {}", dir),
+        };
+
+        let mut where_clause = "WHERE pt.playlist_id = ?1".to_string();
+        let mut params_vec: Vec<rusqlite::types::Value> = vec![playlist_id.into()];
+
+        if let Some(q) = search_query {
+            let trimmed = q.trim();
+            if !trimmed.is_empty() {
+                where_clause.push_str(" AND (t.title LIKE ?2 OR t.artist LIKE ?2 OR t.album LIKE ?2)");
+                params_vec.push(format!("%{}%", trimmed).into());
+            }
+        }
+
+        let sql = format!(
+            r#"
             SELECT pt.id, pt.playlist_id, pt.track_id, pt.sort_order,
                    t.id, t.folder_id, t.path, t.title, t.artist, t.album, t.album_artist,
                    t.genre, t.year, t.track_number, t.disc_number, t.duration_ms,
@@ -575,12 +609,14 @@ impl Database {
             FROM playlist_tracks pt
             JOIN tracks t ON pt.track_id = t.id
             JOIN library_folders f ON t.folder_id = f.id
-            WHERE pt.playlist_id = ?1
-            ORDER BY pt.sort_order ASC
-        "#;
+            {}
+            ORDER BY {}
+            "#,
+            where_clause, order_clause
+        );
 
-        let mut stmt = self.conn.prepare(sql)?;
-        let rows = stmt.query_map(params![playlist_id], |row| {
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params_vec), |row| {
             let pt_id: i64 = row.get(0)?;
             let p_id: i64 = row.get(1)?;
             let t_id: i64 = row.get(2)?;

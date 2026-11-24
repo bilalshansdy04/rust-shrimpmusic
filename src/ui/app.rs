@@ -563,8 +563,13 @@ impl ShrimpMusicApp {
                     let sel_pl_id = w.get_selected_playlist_id();
 
                     if active_view == 1 && sel_pl_id >= 0 {
-                        // User berada di dalam playlist! Bangun antrean HANYA dari lagu-lagu di playlist ini
-                        if let Ok(pl_items) = db9.get_playlist_tracks(sel_pl_id as i64) {
+                        // User berada di dalam playlist! Bangun antrean HANYA dari lagu-lagu di playlist ini (sesuai filter & urutan aktif)
+                        let crit_id = w.get_playlist_sort_criteria();
+                        let asc = w.get_playlist_sort_ascending();
+                        let q_str = w.get_playlist_search_query().to_string();
+                        let search_param = if q_str.trim().is_empty() { None } else { Some(q_str.as_str()) };
+
+                        if let Ok(pl_items) = db9.get_playlist_tracks_filtered(sel_pl_id as i64, search_param, crit_id, asc) {
                             let pl_tracks: Vec<TrackRecord> = pl_items.into_iter().map(|item| item.track).collect();
                             if let Some(idx) = pl_tracks.iter().position(|t| t.id == id as i64) {
                                 start_idx = idx;
@@ -744,14 +749,18 @@ impl ShrimpMusicApp {
 
         let db_pl_sel = db.clone();
         let w_pl_sel = win_weak.clone();
+        let app_rom_pl_sel = self.show_romanized.clone();
         self.window.on_on_select_playlist(move |pl_id| {
             if let Some(w) = w_pl_sel.upgrade() {
                 if let Ok(Some(pl)) = db_pl_sel.get_playlist(pl_id as i64) {
                     w.set_selected_playlist_id(pl_id);
                     w.set_selected_playlist_name(SharedString::from(pl.name));
+                    w.set_playlist_search_query(SharedString::from(""));
+                    w.set_playlist_sort_criteria(0);
+                    w.set_playlist_sort_ascending(true);
                     if let Ok(items) = db_pl_sel.get_playlist_tracks(pl_id as i64) {
                         let tracks: Vec<TrackRecord> = items.into_iter().map(|item| item.track).collect();
-                        let models = Self::convert_tracks_to_models(&tracks);
+                        let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_pl_sel.get(), true, true);
                         w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
                     }
                 }
@@ -826,6 +835,49 @@ impl ShrimpMusicApp {
                     w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
                 }
                 Self::sync_playlists_to_ui(&db_pl_rm, &w);
+            }
+        });
+
+        // 8c-pl. Playlist Sort & Search Callbacks
+        let db_pl_sort = db.clone();
+        let w_pl_sort = win_weak.clone();
+        let app_rom_pl_sort = self.show_romanized.clone();
+        self.window.on_on_playlist_sort_changed(move |crit_id, asc| {
+            if let Some(w) = w_pl_sort.upgrade() {
+                w.set_playlist_sort_criteria(crit_id);
+                w.set_playlist_sort_ascending(asc);
+                let pl_id = w.get_selected_playlist_id();
+                let q_str = w.get_playlist_search_query().to_string();
+                let search_param = if q_str.trim().is_empty() { None } else { Some(q_str.as_str()) };
+
+                if pl_id >= 0 {
+                    if let Ok(items) = db_pl_sort.get_playlist_tracks_filtered(pl_id as i64, search_param, crit_id, asc) {
+                        let tracks: Vec<TrackRecord> = items.into_iter().map(|item| item.track).collect();
+                        let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_pl_sort.get(), true, true);
+                        w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
+                    }
+                }
+            }
+        });
+
+        let db_pl_search = db.clone();
+        let w_pl_search = win_weak.clone();
+        let app_rom_pl_s = self.show_romanized.clone();
+        self.window.on_on_playlist_search_changed(move |query| {
+            if let Some(w) = w_pl_search.upgrade() {
+                let pl_id = w.get_selected_playlist_id();
+                let crit_id = w.get_playlist_sort_criteria();
+                let asc = w.get_playlist_sort_ascending();
+                let q_str = query.to_string();
+                let search_param = if q_str.trim().is_empty() { None } else { Some(q_str.as_str()) };
+
+                if pl_id >= 0 {
+                    if let Ok(items) = db_pl_search.get_playlist_tracks_filtered(pl_id as i64, search_param, crit_id, asc) {
+                        let tracks: Vec<TrackRecord> = items.into_iter().map(|item| item.track).collect();
+                        let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_pl_s.get(), true, true);
+                        w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
+                    }
+                }
             }
         });
 
