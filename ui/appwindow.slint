@@ -51,6 +51,7 @@ export component AppWindow inherits Window {
     in property <[FolderScopeModel]> folder_scopes: [];
     in property <int> selected_track_id: -1;
     in property <int> active_playing_id: -1;
+    in property <int> selected_count: 0;
 
     in property <[LyricLineModel]> lyrics_lines: [];
     in property <bool> has_lyrics: false;
@@ -104,6 +105,17 @@ export component AppWindow inherits Window {
     callback on_sort_changed(int, bool);
     callback on_search_changed(string);
     callback on_add_folder_clicked();
+
+    // Context & Batch Actions
+    callback on_add_to_queue(int);
+    callback on_add_to_playlist(int, int);
+    callback on_add_selected_to_playlist(int);
+    callback on_add_selected_to_queue();
+    callback on_delete_track_from_db(int);
+    callback on_delete_selected_from_db();
+    callback on_toggle_select_track(int);
+    callback on_select_all_tracks();
+    callback on_clear_selection();
 
     callback on_play_queue_item(int);
     callback on_remove_queue_item(int);
@@ -327,6 +339,7 @@ export component AppWindow inherits Window {
                     if root.active_view == 0 : LibraryView {
                         tracks: root.library_tracks;
                         folder_scopes: root.folder_scopes;
+                        playlists: root.playlists;
                         selected_track_id: root.selected_track_id;
                         active_playing_id: root.active_playing_id;
                         total_folders: root.settings_folders.length;
@@ -334,12 +347,24 @@ export component AppWindow inherits Window {
                         scan_status_text: root.scan_status_text;
                         sort_criteria: root.library_sort_criteria;
                         sort_ascending: root.library_sort_ascending;
+                        selected_count: root.selected_count;
 
                         track_selected(id) => { root.on_track_selected(id); }
                         track_double_clicked(id) => { root.on_track_double_clicked(id); }
                         scope_changed(id) => { root.on_scope_changed(id); }
                         sort_changed(crit, asc) => { root.on_sort_changed(crit, asc); }
                         add_folder_clicked => { root.on_add_folder_clicked(); }
+
+                        add_to_queue(id) => { root.on_add_to_queue(id); }
+                        add_to_playlist(pl_id, t_id) => { root.on_add_to_playlist(pl_id, t_id); }
+                        add_selected_to_playlist(pl_id) => { root.on_add_selected_to_playlist(pl_id); }
+                        add_selected_to_queue => { root.on_add_selected_to_queue(); }
+                        delete_track_from_db(id) => { root.on_delete_track_from_db(id); }
+                        delete_selected_from_db => { root.on_delete_selected_from_db(); }
+                        create_playlist_with_tracks(name) => { root.on_create_playlist(name); }
+                        toggle_select_track(id) => { root.on_toggle_select_track(id); }
+                        select_all_tracks => { root.on_select_all_tracks(); }
+                        clear_selection => { root.on_clear_selection(); }
                     }
 
                     // View 1: Playlist View

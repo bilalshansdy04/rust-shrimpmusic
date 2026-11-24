@@ -1,15 +1,8 @@
 import { ThemePalette } from "../theme.slint";
 import { ListView } from "std-widgets.slint";
 import { IconDisplay, IconSet } from "@lucide";
-import { TrackItemModel } from "library.slint";
-
-export struct PlaylistItemModel {
-    id: int,
-    name: string,
-    description: string,
-    track_count: int,
-    artwork_path: string,
-}
+import { TrackItemModel, PlaylistItemModel } from "../models.slint";
+export { PlaylistItemModel }
 
 export component PlaylistView inherits Rectangle {
     in property <[PlaylistItemModel]> playlists: [];
