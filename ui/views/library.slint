@@ -791,6 +791,7 @@ export component LibraryView inherits Rectangle {
             x: root.context_menu_x;
             y: root.context_menu_y;
             width: 230px;
+            height: ctx_layout.preferred-height;
             border-radius: 8px;
             background: ThemePalette.bg_elevated;
             border-width: 1px;
@@ -798,7 +799,7 @@ export component LibraryView inherits Rectangle {
             drop-shadow-blur: 16px;
             drop-shadow-color: #00000066;
 
-            VerticalLayout {
+            ctx_layout := VerticalLayout {
                 padding: 6px;
                 spacing: 2px;
 
