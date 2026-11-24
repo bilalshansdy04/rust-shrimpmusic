@@ -301,22 +301,34 @@ export component LibraryView inherits Rectangle {
                         }
                     }
 
-                    // Exit selection mode button
+                    // Exit / Cancel selection mode button
                     Rectangle {
-                        width: 65px;
+                        width: 75px;
                         height: 26px;
                         border-radius: 6px;
-                        background: close_sel_t.has-hover ? ThemePalette.bg_elevated : transparent;
+                        background: close_sel_t.has-hover ? #dc262622 : ThemePalette.bg_surface;
+                        border-width: 1px;
+                        border-color: close_sel_t.has-hover ? #ef4444 : ThemePalette.border_subtle;
 
-                        Text {
-                            text: "Selesai";
-                            font-size: 11px;
-                            font-weight: 600;
-                            color: ThemePalette.text_muted;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                            width: 100%;
-                            height: 100%;
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 4px;
+
+                            IconDisplay {
+                                icon: IconSet.X;
+                                size: 12px;
+                                stroke: close_sel_t.has-hover ? #ef4444 : ThemePalette.text_muted;
+                                stroke-width: 2.0;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            Text {
+                                text: "Batal";
+                                font-size: 11px;
+                                font-weight: 600;
+                                color: close_sel_t.has-hover ? #ef4444 : ThemePalette.text_muted;
+                                vertical-alignment: center;
+                            }
                         }
 
                         close_sel_t := TouchArea {
@@ -778,13 +790,15 @@ export component LibraryView inherits Rectangle {
         Rectangle {
             x: root.context_menu_x;
             y: root.context_menu_y;
-            width: 240px;
+            width: 230px;
+            height: root.show_playlist_submenu ? (210px + Math.min(180px, root.playlists.length * 28px + (root.show_new_playlist_input ? 34px : 0px))) : 190px;
             border-radius: 8px;
             background: ThemePalette.bg_elevated;
             border-width: 1px;
             border-color: ThemePalette.border_subtle;
             drop-shadow-blur: 16px;
             drop-shadow-color: #00000066;
+            clip: true;
 
             VerticalLayout {
                 padding: 6px;
@@ -1006,7 +1020,7 @@ export component LibraryView inherits Rectangle {
 
                 Rectangle { height: 1px; background: ThemePalette.border_subtle; }
 
-                // 4. Mode Pilih Beberapa Lagu (Multi-Select)
+                // 4. Mode Pilih Beberapa Lagu (Multi-Select) / Batalkan Pilihan
                 Rectangle {
                     height: 32px;
                     border-radius: 4px;
@@ -1019,17 +1033,17 @@ export component LibraryView inherits Rectangle {
                         alignment: start;
 
                         IconDisplay {
-                            icon: IconSet.CheckSquare;
+                            icon: root.is_selection_mode ? IconSet.X : IconSet.CheckSquare;
                             size: 14px;
-                            stroke: ThemePalette.text_secondary;
+                            stroke: root.is_selection_mode ? #ef4444 : ThemePalette.text_secondary;
                             stroke-width: 2.0;
                             y: (parent.height - self.height) / 2;
                         }
 
                         Text {
-                            text: "Pilih Beberapa Lagu";
+                            text: root.is_selection_mode ? "Batalkan Mode Pilih" : "Pilih Beberapa Lagu";
                             font-size: 12px;
-                            color: ThemePalette.text_primary;
+                            color: root.is_selection_mode ? #ef4444 : ThemePalette.text_primary;
                             vertical-alignment: center;
                         }
                     }
@@ -1037,8 +1051,13 @@ export component LibraryView inherits Rectangle {
                     select_mode_t := TouchArea {
                         clicked => {
                             root.show_context_menu = false;
-                            root.is_selection_mode = true;
-                            root.toggle_select_track(root.context_track_id);
+                            if root.is_selection_mode {
+                                root.is_selection_mode = false;
+                                root.clear_selection();
+                            } else {
+                                root.is_selection_mode = true;
+                                root.toggle_select_track(root.context_track_id);
+                            }
                         }
                     }
                 }
