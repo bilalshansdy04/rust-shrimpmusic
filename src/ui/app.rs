@@ -27,13 +27,13 @@ pub struct ShrimpMusicApp {
     queue: Rc<RefCell<PlaybackQueue>>,
     taskbar: Rc<RefCell<TaskbarController>>,
     tray: Rc<RefCell<Option<TrayController>>>,
-    active_scope: Cell<Option<i64>>,
-    sort_criteria: Cell<SortCriteria>,
-    sort_ascending: Cell<bool>,
-    show_romanized: Cell<bool>,
-    romanize_title: Cell<bool>,
-    romanize_artist: Cell<bool>,
-    romanize_lyrics: Cell<bool>,
+    active_scope: Rc<Cell<Option<i64>>>,
+    sort_criteria: Rc<Cell<SortCriteria>>,
+    sort_ascending: Rc<Cell<bool>>,
+    show_romanized: Rc<Cell<bool>>,
+    romanize_title: Rc<Cell<bool>>,
+    romanize_artist: Rc<Cell<bool>>,
+    romanize_lyrics: Rc<Cell<bool>>,
     last_lyrics_scroll_time: Rc<Cell<Option<Instant>>>,
     _timer: slint::Timer,
     win_volume: crate::audio::WindowsVolumeController,
@@ -181,13 +181,13 @@ impl ShrimpMusicApp {
             queue,
             taskbar,
             tray,
-            active_scope: Cell::new(None),
-            sort_criteria: Cell::new(sort_criteria),
-            sort_ascending: Cell::new(sort_ascending),
-            show_romanized: Cell::new(show_romanized),
-            romanize_title: Cell::new(romanize_title),
-            romanize_artist: Cell::new(romanize_artist),
-            romanize_lyrics: Cell::new(romanize_lyrics),
+            active_scope: Rc::new(Cell::new(None)),
+            sort_criteria: Rc::new(Cell::new(sort_criteria)),
+            sort_ascending: Rc::new(Cell::new(sort_ascending)),
+            show_romanized: Rc::new(Cell::new(show_romanized)),
+            romanize_title: Rc::new(Cell::new(romanize_title)),
+            romanize_artist: Rc::new(Cell::new(romanize_artist)),
+            romanize_lyrics: Rc::new(Cell::new(romanize_lyrics)),
             last_lyrics_scroll_time,
             _timer: timer,
             win_volume,
@@ -1174,7 +1174,7 @@ impl ShrimpMusicApp {
         self.window.on_on_rescan_folder(move |folder_id| {
             let win_c = w_rescan.clone();
             let db_path = default_db_path();
-            let cur_scope_ref = app_scope_rescan.clone();
+            let cur_scope = app_scope_rescan.get();
             let cur_sort = app_sort_rescan.get();
             let cur_asc = app_asc_rescan.get();
             let cur_rom = app_rom_rescan.get();
@@ -1252,7 +1252,6 @@ impl ShrimpMusicApp {
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(w) = win_c.upgrade() {
                                     w.set_is_scanning(false);
-                                    let cur_scope = cur_scope_ref.get();
                                     Self::sync_folders_and_scopes_to_ui(&worker_db, &w, cur_scope);
                                     if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
                                         let models = Self::convert_tracks_to_models_with_option(&tracks, cur_rom);
@@ -1412,7 +1411,7 @@ impl ShrimpMusicApp {
 
         self.window.on_on_add_folder_clicked(move || {
             let win_c = win_add.clone();
-            let cur_scope_ref = app_scope_add.clone();
+            let cur_scope = app_scope_add.get();
             let cur_sort = app_sort_add.get();
             let cur_asc = app_asc_add.get();
             let cur_rom = app_rom_add.get();
@@ -1507,7 +1506,6 @@ impl ShrimpMusicApp {
                                     w.set_is_scanning(false);
 
                                     // 1. Refresh folder scopes & settings folders
-                                    let cur_scope = cur_scope_ref.get();
                                     if let Ok(folders) = worker_db.get_all_folders() {
                                         let mut folder_models = Vec::new();
                                         let mut scope_models = vec![FolderScopeModel {
@@ -1608,12 +1606,12 @@ impl ShrimpMusicApp {
             }
         });
 
-        // 23. Clear queue
+        // 23. Clear queue (Keep currently playing song intact!)
         let q_clear = q_ref.clone();
         let w_clear = win_weak.clone();
         self.window.on_on_clear_queue(move || {
             let mut q = q_clear.borrow_mut();
-            q.clear();
+            q.clear_upcoming();
             if let Some(w) = w_clear.upgrade() {
                 Self::sync_queue_to_ui(&q, &w);
             }

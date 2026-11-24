@@ -166,6 +166,22 @@ impl PlaybackQueue {
         self.history.clear();
     }
 
+    /// Clears upcoming tracks in queue, keeping the currently playing track intact at index 0.
+    pub fn clear_upcoming(&mut self) {
+        if let Some(cur) = self.current_index {
+            if cur < self.items.len() {
+                let current_song = self.items[cur].clone();
+                self.items.clear();
+                self.items.push(current_song);
+                self.current_index = Some(0);
+                return;
+            }
+        }
+        self.items.clear();
+        self.current_index = None;
+        self.history.clear();
+    }
+
     pub fn remove_at(&mut self, index: usize) -> Option<TrackRecord> {
         if index >= self.items.len() {
             return None;
