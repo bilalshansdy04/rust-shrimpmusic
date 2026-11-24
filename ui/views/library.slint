@@ -1099,6 +1099,7 @@ export component LibraryView inherits Rectangle {
             x: parent.width - 200px;
             y: 95px;
             width: 175px;
+            height: lib_sort_layout.preferred-height;
             border-radius: 8px;
             background: ThemePalette.bg_elevated;
             border-width: 1px;
@@ -1106,7 +1107,7 @@ export component LibraryView inherits Rectangle {
             drop-shadow-blur: 16px;
             drop-shadow-color: #00000066;
 
-            VerticalLayout {
+            lib_sort_layout := VerticalLayout {
                 padding: 6px;
                 spacing: 2px;
 
