@@ -116,14 +116,20 @@ pub fn extract_metadata(path: &Path) -> Result<ParsedMetadata, Box<dyn std::erro
             cover_art = Some(t.pictures()[0].data().to_vec());
         }
 
-        // Embedded Lyrics extraction
-        if let Some(item) = t.get(ItemKey::Lyrics) {
-            if let Some(text) = item.value().text() {
-                let trimmed = text.trim();
-                if !trimmed.is_empty() {
-                    lyrics = Some(trimmed.to_string());
-                    is_synced_lyrics = check_is_synced(trimmed);
-                }
+        // Embedded Lyrics extraction from primary tag (check Lyrics, UnsyncLyrics, and Unknown lyric keys)
+        if let Some(found) = extract_lyrics_from_tag(t) {
+            is_synced_lyrics = check_is_synced(&found);
+            lyrics = Some(found);
+        }
+    }
+
+    // Fallback: check ALL tags on the file if primary tag had no lyrics (e.g. FLAC with both ID3v2 and Vorbis)
+    if lyrics.is_none() {
+        for t in tagged_file.tags() {
+            if let Some(found) = extract_lyrics_from_tag(t) {
+                is_synced_lyrics = check_is_synced(&found);
+                lyrics = Some(found);
+                break;
             }
         }
     }
@@ -163,17 +169,75 @@ pub fn extract_metadata(path: &Path) -> Result<ParsedMetadata, Box<dyn std::erro
     })
 }
 
+fn extract_lyrics_from_tag(tag: &lofty::tag::Tag) -> Option<String> {
+    // 1. Standard ItemKey::Lyrics (Vorbis LYRICS, MP4 ©lyr, APE Lyrics)
+    for item in tag.get_items(ItemKey::Lyrics) {
+        if let Some(text) = item.value().text() {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+
+    // 2. ItemKey::UnsyncLyrics (ID3v2 USLT, Vorbis UNSYNCEDLYRICS, MP4 ©lyr)
+    for item in tag.get_items(ItemKey::UnsyncLyrics) {
+        if let Some(text) = item.value().text() {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+
+    None
+}
+
 pub fn check_is_synced(raw: &str) -> bool {
-    raw.lines().any(|line| {
+    let normalized = normalize_inline_lrc(raw);
+    normalized.lines().any(|line| {
         let trimmed = line.trim();
-        trimmed.starts_with('[') && trimmed.len() >= 9 && trimmed.as_bytes().get(3) == Some(&b':')
+        if let (Some(open), Some(close)) = (trimmed.find('['), trimmed.find(']')) {
+            if open == 0 && close > 1 {
+                return parse_timestamp_ms(&trimmed[1..close]).is_some();
+            }
+        }
+        false
     })
 }
 
+fn normalize_inline_lrc(raw: &str) -> String {
+    // If the entire lyrics tag was stored on a single line (no \n or \r) with multiple [mm:ss...] tags,
+    // split before each timestamp bracket so every line parses cleanly.
+    let mut result = raw.replace('\r', "\n");
+    if result.lines().count() <= 1 && result.matches('[').count() > 1 {
+        let mut out = String::with_capacity(result.len() + 32);
+        let bytes = result.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'[' && i > 0 {
+                // Check if this looks like [dd:dd...]
+                let rest = &result[i..];
+                if let Some(close) = rest.find(']') {
+                    if parse_timestamp_ms(&rest[1..close]).is_some() {
+                        out.push('\n');
+                    }
+                }
+            }
+            let ch = result[i..].chars().next().unwrap();
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+        result = out;
+    }
+    result
+}
+
 pub fn parse_lrc_lines(raw: &str) -> Vec<LyricLine> {
+    let normalized = normalize_inline_lrc(raw);
     let mut lines = Vec::new();
 
-    for line in raw.lines() {
+    for line in normalized.lines() {
         let trimmed = line.trim();
         if !trimmed.starts_with('[') {
             continue;
@@ -209,31 +273,43 @@ pub fn parse_lrc_lines(raw: &str) -> Vec<LyricLine> {
 
 fn parse_timestamp_ms(tag: &str) -> Option<i64> {
     let parts: Vec<&str> = tag.split(':').collect();
-    if parts.len() != 2 {
-        return None;
-    }
+    if parts.len() == 2 {
+        let minutes: i64 = parts[0].trim().parse().ok()?;
+        let sec_parts: Vec<&str> = parts[1].split('.').collect();
+        if sec_parts.is_empty() {
+            return None;
+        }
 
-    let minutes: i64 = parts[0].trim().parse().ok()?;
-    let sec_parts: Vec<&str> = parts[1].split('.').collect();
-    if sec_parts.is_empty() {
-        return None;
-    }
-
-    let seconds: i64 = sec_parts[0].trim().parse().ok()?;
-    let ms: i64 = if sec_parts.len() > 1 {
-        let frac = sec_parts[1].trim();
-        if frac.len() == 2 {
-            frac.parse::<i64>().ok()? * 10
-        } else if frac.len() == 3 {
-            frac.parse::<i64>().ok()?
-        } else if frac.len() == 1 {
-            frac.parse::<i64>().ok()? * 100
+        let seconds: i64 = sec_parts[0].trim().parse().ok()?;
+        let ms: i64 = if sec_parts.len() > 1 {
+            parse_fraction_ms(sec_parts[1].trim())?
         } else {
             0
-        }
-    } else {
-        0
-    };
+        };
 
-    Some(minutes * 60_000 + seconds * 1000 + ms)
+        Some(minutes * 60_000 + seconds * 1000 + ms)
+    } else if parts.len() == 3 {
+        // Support [mm:ss:xx] format (e.g. [00:00:07])
+        let minutes: i64 = parts[0].trim().parse().ok()?;
+        let seconds: i64 = parts[1].trim().parse().ok()?;
+        let ms: i64 = parse_fraction_ms(parts[2].trim())?;
+        Some(minutes * 60_000 + seconds * 1000 + ms)
+    } else {
+        None
+    }
+}
+
+fn parse_fraction_ms(frac: &str) -> Option<i64> {
+    if frac.is_empty() {
+        return Some(0);
+    }
+    if frac.len() == 2 {
+        Some(frac.parse::<i64>().ok()? * 10)
+    } else if frac.len() == 3 {
+        Some(frac.parse::<i64>().ok()?)
+    } else if frac.len() == 1 {
+        Some(frac.parse::<i64>().ok()? * 100)
+    } else {
+        Some(0)
+    }
 }

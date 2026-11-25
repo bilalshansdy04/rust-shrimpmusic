@@ -34,11 +34,14 @@ export component SettingsDrawer inherits Rectangle {
     in property <bool> is_eq_enabled: false;
     in property <[float]> eq_bands: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
     in property <int> volume_balance_mode: 0;
+    in property <bool> is_scanning: false;
+    in property <string> scan_status_text: "";
 
     callback close_drawer();
     callback toggle_folder(int, bool);
     callback remove_folder(int);
     callback rescan_folder(int);
+    callback rescan_all_folders();
     callback add_folder();
     callback toggle_exclusive(bool);
     callback select_device(string);
@@ -641,6 +644,38 @@ export component SettingsDrawer inherits Rectangle {
                 spacing: 8px;
                 alignment: start;
 
+                if root.is_scanning : Rectangle {
+                    height: 36px;
+                    border-radius: 8px;
+                    background: ThemePalette.accent_subtle;
+                    border-width: 1px;
+                    border-color: ThemePalette.accent_primary;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 8px;
+                        alignment: start;
+
+                        IconDisplay {
+                            icon: IconSet.RotateCw;
+                            size: 14px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.0;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        Text {
+                            text: root.scan_status_text != "" ? root.scan_status_text : "Memindai ulang pustaka & lirik...";
+                            font-size: 11px;
+                            font-weight: 600;
+                            color: ThemePalette.accent_primary;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+
                 HorizontalLayout {
                     alignment: space-between;
 
@@ -652,36 +687,76 @@ export component SettingsDrawer inherits Rectangle {
                         vertical-alignment: center;
                     }
 
-                    // + Tambah Folder Button
-                    Rectangle {
-                        height: 28px;
-                        border-radius: 14px;
-                        background: ThemePalette.accent_primary;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: end;
 
-                        HorizontalLayout {
-                            padding-left: 10px;
-                            padding-right: 12px;
-                            spacing: 6px;
+                        // Refresh All Folders Button (Force Rescan Metadata & Lirik)
+                        if root.folders.length > 0 : Rectangle {
+                            height: 28px;
+                            border-radius: 14px;
+                            background: ref_all_t.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
+                            border-width: 1px;
+                            border-color: ThemePalette.border_subtle;
 
-                            IconDisplay {
-                                icon: IconSet.FolderPlus;
-                                size: 13px;
-                                stroke: #FFFFFF;
-                                stroke-width: 2.0;
-                                y: (parent.height - self.height) / 2;
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 12px;
+                                spacing: 6px;
+
+                                IconDisplay {
+                                    icon: IconSet.RotateCw;
+                                    size: 12px;
+                                    stroke: ThemePalette.accent_primary;
+                                    stroke-width: 2.0;
+                                    y: (parent.height - self.height) / 2;
+                                }
+
+                                Text {
+                                    text: "Refresh Semua";
+                                    font-size: 11px;
+                                    font-weight: 600;
+                                    color: ThemePalette.text_primary;
+                                    vertical-alignment: center;
+                                }
                             }
 
-                            Text {
-                                text: "Tambah Folder";
-                                font-size: 11px;
-                                font-weight: 700;
-                                color: #FFFFFF;
-                                vertical-alignment: center;
+                            ref_all_t := TouchArea {
+                                clicked => { root.rescan_all_folders(); }
                             }
                         }
 
-                        TouchArea {
-                            clicked => { root.add_folder(); }
+                        // + Tambah Folder Button
+                        Rectangle {
+                            height: 28px;
+                            border-radius: 14px;
+                            background: ThemePalette.accent_primary;
+
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 12px;
+                                spacing: 6px;
+
+                                IconDisplay {
+                                    icon: IconSet.FolderPlus;
+                                    size: 13px;
+                                    stroke: #FFFFFF;
+                                    stroke-width: 2.0;
+                                    y: (parent.height - self.height) / 2;
+                                }
+
+                                Text {
+                                    text: "Tambah Folder";
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    color: #FFFFFF;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            TouchArea {
+                                clicked => { root.add_folder(); }
+                            }
                         }
                     }
                 }

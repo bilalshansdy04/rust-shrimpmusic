@@ -52,6 +52,25 @@ impl Scanner {
         cancel_token: Option<&Arc<AtomicBool>>,
         progress_tx: Option<&crossbeam_channel::Sender<ScanProgress>>,
     ) -> Result<(usize, usize, usize, usize), Box<dyn std::error::Error + Send + Sync>> {
+        self.scan_folder_with_options(
+            db,
+            folder_id,
+            folder_path,
+            cancel_token,
+            progress_tx,
+            false,
+        )
+    }
+
+    pub fn scan_folder_with_options(
+        &self,
+        db: &Database,
+        folder_id: i64,
+        folder_path: &Path,
+        cancel_token: Option<&Arc<AtomicBool>>,
+        progress_tx: Option<&crossbeam_channel::Sender<ScanProgress>>,
+        force_refresh: bool,
+    ) -> Result<(usize, usize, usize, usize), Box<dyn std::error::Error + Send + Sync>> {
         let mut audio_files = Vec::new();
         for entry in WalkDir::new(folder_path).follow_links(true).into_iter().filter_map(|e| e.ok()) {
             if let Some(token) = cancel_token {
@@ -98,25 +117,45 @@ impl Scanner {
                 .map(|d| d.as_secs() as i64)
                 .unwrap_or(0);
 
-            // Fast skip check: if already in DB with same file size and mod time,
-            // ensure folder_id is up to date and skip heavy metadata extraction!
-            if let Ok(Some(existing)) = db.get_track_by_path(&path_str) {
-                if existing.file_size == file_size && existing.modified_time == modified_time {
-                    if existing.folder_id != folder_id {
-                        let _ = db.conn().execute(
-                            "UPDATE tracks SET folder_id = ?1 WHERE path = ?2",
-                            rusqlite::params![folder_id, &path_str],
-                        );
+            // Fast skip check: if not force_refresh and already in DB with same file size and mod time
+            // (and no newer external .lrc file), skip heavy metadata extraction!
+            if !force_refresh {
+                if let Ok(Some(existing)) = db.get_track_by_path(&path_str) {
+                    let lrc_changed = {
+                        let lrc_path = path.with_extension("lrc");
+                        if lrc_path.exists() {
+                            let lrc_mtime = std::fs::metadata(&lrc_path)
+                                .ok()
+                                .and_then(|m| m.modified().ok())
+                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs() as i64)
+                                .unwrap_or(0);
+                            !existing.has_lyrics || lrc_mtime > existing.modified_time
+                        } else {
+                            false
+                        }
+                    };
+
+                    if !lrc_changed
+                        && existing.file_size == file_size
+                        && existing.modified_time == modified_time
+                    {
+                        if existing.folder_id != folder_id {
+                            let _ = db.conn().execute(
+                                "UPDATE tracks SET folder_id = ?1 WHERE path = ?2",
+                                rusqlite::params![folder_id, &path_str],
+                            );
+                        }
+                        unchanged += 1;
+                        if let Some(tx) = progress_tx {
+                            let _ = tx.send(ScanProgress::FileScanned {
+                                current: idx + 1,
+                                total,
+                                path: path_str,
+                            });
+                        }
+                        continue;
                     }
-                    unchanged += 1;
-                    if let Some(tx) = progress_tx {
-                        let _ = tx.send(ScanProgress::FileScanned {
-                            current: idx + 1,
-                            total,
-                            path: path_str,
-                        });
-                    }
-                    continue;
                 }
             }
 

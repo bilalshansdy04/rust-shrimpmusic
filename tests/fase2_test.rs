@@ -154,6 +154,16 @@ fn test_lyrics_parsing_and_search() {
     assert_eq!(parsed[3].timestamp_ms, 30_000);
     assert_eq!(parsed[3].text, "Dual timestamp chorus line");
 
+    // Test colon separator [mm:ss:xx] and single-line inline LRC embedded format
+    let colon_inline_lrc = "[00:00:07] La, na-na-na-na, dam-da [00:05.25] Second line";
+    assert!(check_is_synced(colon_inline_lrc));
+    let parsed_inline = parse_lrc_lines(colon_inline_lrc);
+    assert_eq!(parsed_inline.len(), 2);
+    assert_eq!(parsed_inline[0].timestamp_ms, 70);
+    assert_eq!(parsed_inline[0].text, "La, na-na-na-na, dam-da");
+    assert_eq!(parsed_inline[1].timestamp_ms, 5_250);
+    assert_eq!(parsed_inline[1].text, "Second line");
+
     // Test DB search with lyrics
     let db = open_memory_database().expect("Failed to open db");
     let fid = db.add_folder("D:\\Music").unwrap();
