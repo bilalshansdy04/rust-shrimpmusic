@@ -1,4 +1,4 @@
-# Changelog — ShrimpMusic Player v1.0.0
+# Changelog — ShrimpMusic Player v1.1.0
 
 Dokumen ini merangkum secara lengkap dan rinci seluruh fitur, arsitektur, alur pemindaian pustaka, konversi/romanisasi teks, pemrosesan audio, manajemen antrean & playlist, integrasi sistem Windows, serta seluruh isi panel **Pengaturan** pada **ShrimpMusic Player**.
 
