@@ -687,7 +687,7 @@ impl ShrimpMusicApp {
         let app_scope = self.active_scope.clone();
         let app_sort = self.sort_criteria.clone();
         let app_asc = self.sort_ascending.clone();
-        let app_rom = self.show_romanized.clone();
+        let _app_rom = self.show_romanized.clone();
         self.window.on_on_scope_changed(move |scope_id| {
             let target_scope = if scope_id < 0 { None } else { Some(scope_id as i64) };
             app_scope.set(target_scope);
@@ -718,7 +718,7 @@ impl ShrimpMusicApp {
         let app_scope_sort = self.active_scope.clone();
         let app_sort_crit = self.sort_criteria.clone();
         let app_sort_asc = self.sort_ascending.clone();
-        let app_rom_sort = self.show_romanized.clone();
+        let _app_rom_sort = self.show_romanized.clone();
         self.window.on_on_sort_changed(move |crit_id, asc| {
             let criteria = SortCriteria::from_i32(crit_id);
             app_sort_crit.set(criteria);
@@ -745,7 +745,7 @@ impl ShrimpMusicApp {
         let app_scope_s = self.active_scope.clone();
         let app_sort_s = self.sort_criteria.clone();
         let app_asc_s = self.sort_ascending.clone();
-        let app_rom_s = self.show_romanized.clone();
+        let _app_rom_s = self.show_romanized.clone();
         self.window.on_on_search_changed(move |query| {
             if let Some(w) = w_search.upgrade() {
                 let trimmed = query.trim().to_string();
@@ -822,7 +822,7 @@ impl ShrimpMusicApp {
 
         let db_pl_sel = db.clone();
         let w_pl_sel = win_weak.clone();
-        let app_rom_pl_sel = self.show_romanized.clone();
+        let _app_rom_pl_sel = self.show_romanized.clone();
         self.window.on_on_select_playlist(move |pl_id| {
             if let Some(w) = w_pl_sel.upgrade() {
                 if let Ok(Some(pl)) = db_pl_sel.get_playlist(pl_id as i64) {
@@ -914,7 +914,7 @@ impl ShrimpMusicApp {
         // 8c-pl. Playlist Sort & Search Callbacks
         let db_pl_sort = db.clone();
         let w_pl_sort = win_weak.clone();
-        let app_rom_pl_sort = self.show_romanized.clone();
+        let _app_rom_pl_sort = self.show_romanized.clone();
         self.window.on_on_playlist_sort_changed(move |crit_id, asc| {
             if let Some(w) = w_pl_sort.upgrade() {
                 w.set_playlist_sort_criteria(crit_id);
@@ -935,7 +935,7 @@ impl ShrimpMusicApp {
 
         let db_pl_search = db.clone();
         let w_pl_search = win_weak.clone();
-        let app_rom_pl_s = self.show_romanized.clone();
+        let _app_rom_pl_s = self.show_romanized.clone();
         self.window.on_on_playlist_search_changed(move |query| {
             if let Some(w) = w_pl_search.upgrade() {
                 let pl_id = w.get_selected_playlist_id();
@@ -987,7 +987,7 @@ impl ShrimpMusicApp {
         let app_scope_del = self.active_scope.clone();
         let app_sort_del = self.sort_criteria.clone();
         let app_asc_del = self.sort_ascending.clone();
-        let app_rom_del = self.show_romanized.clone();
+        let _app_rom_del = self.show_romanized.clone();
         self.window.on_on_delete_track_from_db(move |track_id| {
             let _ = db_ctx_del.delete_track(track_id as i64);
             // Also remove from playback queue if present
@@ -1178,7 +1178,7 @@ impl ShrimpMusicApp {
         let app_scope_bdel = self.active_scope.clone();
         let app_sort_bdel = self.sort_criteria.clone();
         let app_asc_bdel = self.sort_ascending.clone();
-        let app_rom_bdel = self.show_romanized.clone();
+        let _app_rom_bdel = self.show_romanized.clone();
         self.window.on_on_delete_selected_from_db(move || {
             if let Some(w) = w_batch_del.upgrade() {
                 let model = w.get_library_tracks();
@@ -1424,7 +1424,7 @@ impl ShrimpMusicApp {
             let cur_scope = app_scope_rescan.get();
             let cur_sort = app_sort_rescan.get();
             let cur_asc = app_asc_rescan.get();
-            let cur_rom = app_rom_rescan.get();
+            let _cur_rom = app_rom_rescan.get();
 
             std::thread::spawn(move || {
                 if let Ok(worker_db) = open_database(&db_path) {
@@ -1525,7 +1525,7 @@ impl ShrimpMusicApp {
             let cur_scope = app_scope_all.get();
             let cur_sort = app_sort_all.get();
             let cur_asc = app_asc_all.get();
-            let cur_rom = app_rom_all.get();
+            let _cur_rom = app_rom_all.get();
 
             std::thread::spawn(move || {
                 if let Ok(worker_db) = open_database(&db_path) {
@@ -1750,7 +1750,7 @@ impl ShrimpMusicApp {
             let cur_scope = app_scope_add.get();
             let cur_sort = app_sort_add.get();
             let cur_asc = app_asc_add.get();
-            let cur_rom = app_rom_add.get();
+            let _cur_rom = app_rom_add.get();
 
             std::thread::spawn(move || {
                 if let Some(folder_path) = rfd::FileDialog::new()
