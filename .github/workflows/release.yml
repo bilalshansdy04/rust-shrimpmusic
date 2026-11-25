@@ -63,11 +63,12 @@ jobs:
           Compress-Archive -Path "$portableDir/*" -DestinationPath $zipPath -Force
           Remove-Item -Recurse -Force $portableDir
 
-          # 3. Generate SHA256 Checksums
-          Get-ChildItem "dist" -File | ForEach-Object {
+          # 3. Generate SHA256 Checksums (exclude SHA256SUMS.txt itself & collect before writing)
+          $hashes = Get-ChildItem "dist" -File | Where-Object { $_.Extension -in '.exe', '.zip' } | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)"
-          } | Out-File -FilePath "dist/SHA256SUMS.txt" -Encoding utf8
+          }
+          $hashes | Out-File -FilePath "dist/SHA256SUMS.txt" -Encoding utf8
 
           Get-ChildItem "dist"
 
