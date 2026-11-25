@@ -13,7 +13,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    shrimp_music::ui::taskbar::init_app_user_model_id();
+
     let args: Vec<String> = std::env::args().collect();
+    let mut initial_play_track_id: Option<i64> = None;
+    let mut arg_iter = args.iter().skip(1);
+    while let Some(arg) = arg_iter.next() {
+        if arg == "--play-track" {
+            if let Some(id_str) = arg_iter.next() {
+                if let Ok(id) = id_str.parse::<i64>() {
+                    initial_play_track_id = Some(id);
+                }
+            }
+        }
+    }
+
+    if let Some(track_id) = initial_play_track_id {
+        if shrimp_music::ui::taskbar::try_forward_play_track_to_existing(track_id) {
+            return Ok(());
+        }
+    }
     if args.iter().any(|a| a == "--headless" || a == "-h") {
         let _ = wasapi::initialize_mta();
         println!("=== ShrimpMusic - Headless Status Check ===");
@@ -55,6 +74,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Launch Slint GUI Application
     let app = ShrimpMusicApp::new()?;
+    if let Some(track_id) = initial_play_track_id {
+        app.play_track_by_id(track_id);
+    }
     app.run()?;
 
     Ok(())

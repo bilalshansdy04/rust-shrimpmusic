@@ -5,6 +5,10 @@ fn main() {
     {
         let mut res = winres::WindowsResource::new();
         res.set_icon("assets/logo.ico");
+        res.set("FileDescription", "ShrimpMusic Player");
+        res.set("ProductName", "ShrimpMusic Player");
+        res.set("OriginalFilename", "shrimp-music-player.exe");
+        res.set("CompanyName", "Bilal Shandyarta Syamsudin");
         let _ = res.compile();
     }
 
