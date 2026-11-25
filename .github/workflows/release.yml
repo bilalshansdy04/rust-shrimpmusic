@@ -1,0 +1,79 @@
+name: Release Windows Installer & Portable
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build & Release Windows (x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run test suite
+        run: cargo test
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Install cargo-packager
+        run: |
+          if (!(Get-Command cargo-packager -ErrorAction SilentlyContinue)) {
+            cargo install cargo-packager --locked
+          }
+
+      - name: Package NSIS Installer & Portable ZIP
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          # 1. Build NSIS Installer via cargo-packager
+          cargo packager -r -f nsis -o dist
+
+          # 2. Build Portable ZIP
+          $portableDir = "dist/portable_tmp"
+          New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+          Copy-Item "target/release/shrimp-music-player.exe" "$portableDir/shrimp-music-player.exe"
+          Copy-Item "README.md" "$portableDir/README.md"
+          $zipPath = "dist/ShrimpMusic-Player-$tag-win64-portable.zip"
+          Compress-Archive -Path "$portableDir/*" -DestinationPath $zipPath -Force
+          Remove-Item -Recurse -Force $portableDir
+
+          # 3. Generate SHA256 Checksums
+          Get-ChildItem "dist" -File | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          } | Out-File -FilePath "dist/SHA256SUMS.txt" -Encoding utf8
+
+          Get-ChildItem "dist"
+
+      - name: Create GitHub Release & Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
