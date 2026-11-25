@@ -66,6 +66,7 @@ impl LoopMode {
 
 pub struct PlaybackQueue {
     items: Vec<TrackRecord>,
+    original_order: Vec<i64>,
     current_index: Option<usize>,
     shuffle_enabled: bool,
     shuffle_style: ShuffleStyle,
@@ -83,6 +84,7 @@ impl PlaybackQueue {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
+            original_order: Vec::new(),
             current_index: None,
             shuffle_enabled: false,
             shuffle_style: ShuffleStyle::ReducedRepeat,
@@ -94,10 +96,13 @@ impl PlaybackQueue {
     pub fn set_items(&mut self, items: Vec<TrackRecord>, start_index: Option<usize>) {
         if items.is_empty() {
             self.items.clear();
+            self.original_order.clear();
             self.current_index = None;
             self.history.clear();
             return;
         }
+
+        self.original_order = items.iter().map(|t| t.id).collect();
 
         let start = start_index.unwrap_or(0).min(items.len() - 1);
         let selected_item = items[start].clone();
@@ -105,11 +110,11 @@ impl PlaybackQueue {
         let mut ordered_items = Vec::with_capacity(items.len());
         ordered_items.push(selected_item);
 
-        let mut remaining: Vec<TrackRecord> = items
-            .into_iter()
-            .enumerate()
-            .filter(|(idx, _)| *idx != start)
-            .map(|(_, item)| item)
+        // Rotate remaining tracks starting from (start + 1 .. len) then wrapping around to (0 .. start)
+        let mut remaining: Vec<TrackRecord> = items[start + 1..]
+            .iter()
+            .chain(items[..start].iter())
+            .cloned()
             .collect();
 
         if self.shuffle_enabled {
@@ -263,6 +268,58 @@ impl PlaybackQueue {
                 self.items.swap(i, j);
             }
         }
+    }
+
+    /// Restores upcoming items to their original library/playlist sorted order
+    /// while keeping the currently playing track pinned at index 0.
+    pub fn restore_original_order(&mut self) {
+        if self.items.len() <= 1 || self.original_order.is_empty() {
+            return;
+        }
+        let Some(cur_idx) = self.current_index else {
+            return;
+        };
+        if cur_idx >= self.items.len() {
+            return;
+        }
+
+        let cur_item = self.items[cur_idx].clone();
+        let mut remaining: Vec<TrackRecord> = self
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| *idx != cur_idx)
+            .map(|(_, item)| item.clone())
+            .collect();
+
+        // Sort remaining items rotated around cur_item's position in original_order
+        // so tracks after the current song come first, followed by tracks before it.
+        let total_orig = self.original_order.len();
+        let cur_orig_pos = self
+            .original_order
+            .iter()
+            .position(|&oid| oid == cur_item.id)
+            .unwrap_or(0);
+
+        let orig_rot_key = |id: i64| -> usize {
+            match self.original_order.iter().position(|&oid| oid == id) {
+                Some(pos) => {
+                    if pos > cur_orig_pos {
+                        pos - cur_orig_pos
+                    } else {
+                        (total_orig - cur_orig_pos) + pos
+                    }
+                }
+                None => usize::MAX,
+            }
+        };
+        remaining.sort_by_key(|t| orig_rot_key(t.id));
+
+        let mut new_items = Vec::with_capacity(self.items.len());
+        new_items.push(cur_item);
+        new_items.extend(remaining);
+        self.items = new_items;
+        self.current_index = Some(0);
     }
 
     pub fn set_shuffle(&mut self, enabled: bool) {

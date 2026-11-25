@@ -16,6 +16,8 @@ export component LibraryView inherits Rectangle {
     in property <int> sort_criteria: 0; // 0: Title, 1: Artist, 2: Album, 5: DateAdded
     in property <bool> sort_ascending: true;
     in property <int> selected_count: 0;
+    in-out property <bool> show_duplicate_alert: false;
+    in property <string> duplicate_alert_message: "";
 
     callback track_selected(int);
     callback track_double_clicked(int);
@@ -31,6 +33,8 @@ export component LibraryView inherits Rectangle {
     callback delete_track_from_db(int);
     callback delete_selected_from_db();
     callback create_playlist_with_tracks(string, int);
+    callback create_playlist_with_selected(string);
+    callback resolve_playlist_duplicate(int); // 0: Cancel, 1: Skip duplicates, 2: Add anyway
     callback toggle_select_track(int);
     callback select_all_tracks();
     callback clear_selection();
@@ -43,8 +47,10 @@ export component LibraryView inherits Rectangle {
     property <string> context_track_title: "";
     property <bool> show_playlist_submenu: false;
     property <bool> show_new_playlist_input: false;
+    property <bool> new_playlist_for_selection: false;
     property <string> new_playlist_name: "";
     property <bool> is_selection_mode: false;
+    property <bool> show_batch_playlist_menu: false;
     property <bool> show_sort_menu: false;
 
     background: transparent;
@@ -264,6 +270,43 @@ export component LibraryView inherits Rectangle {
 
                         TouchArea {
                             clicked => { root.add_selected_to_queue(); }
+                        }
+                    }
+
+                    // Batch Action: Tambah ke Playlist (buka dropdown pilihan playlist)
+                    if root.selected_count > 0 : Rectangle {
+                        width: 112px;
+                        height: 26px;
+                        border-radius: 6px;
+                        background: batch_pl_btn_t.has-hover ? ThemePalette.accent_primary : ThemePalette.accent_subtle;
+                        border-width: 1px;
+                        border-color: ThemePalette.accent_primary;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 6px;
+
+                            IconDisplay {
+                                icon: IconSet.PlusSquare;
+                                size: 13px;
+                                stroke: batch_pl_btn_t.has-hover ? #FFFFFF : ThemePalette.accent_primary;
+                                stroke-width: 1.8;
+                                y: (parent.height - self.height) / 2;
+                            }
+
+                            Text {
+                                text: "+ Ke Playlist";
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: batch_pl_btn_t.has-hover ? #FFFFFF : ThemePalette.accent_primary;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        batch_pl_btn_t := TouchArea {
+                            clicked => {
+                                root.show_batch_playlist_menu = !root.show_batch_playlist_menu;
+                            }
                         }
                     }
 
@@ -1050,12 +1093,13 @@ export component LibraryView inherits Rectangle {
                         cancel_ctx_pl_t := TouchArea {
                             clicked => {
                                 root.show_new_playlist_input = false;
+                                root.new_playlist_for_selection = false;
                                 root.new_playlist_name = "";
                             }
                         }
                     }
 
-                    // Create & Add Track
+                    // Create & Add Track(s)
                     Rectangle {
                         width: 110px;
                         height: 34px;
@@ -1074,10 +1118,336 @@ export component LibraryView inherits Rectangle {
                         TouchArea {
                             clicked => {
                                 if (root.new_playlist_name != "") {
-                                    root.create_playlist_with_tracks(root.new_playlist_name, root.context_track_id);
+                                    if (root.new_playlist_for_selection) {
+                                        root.create_playlist_with_selected(root.new_playlist_name);
+                                    } else {
+                                        root.create_playlist_with_tracks(root.new_playlist_name, root.context_track_id);
+                                    }
                                     root.show_new_playlist_input = false;
+                                    root.new_playlist_for_selection = false;
                                     root.new_playlist_name = "";
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================
+    // DROPDOWN PILIHAN PLAYLIST UNTUK MULTI-SELECT (COMPACT)
+    // =========================================================
+    if root.show_batch_playlist_menu : TouchArea {
+        width: 100%;
+        height: 100%;
+        z: 998;
+        clicked => { root.show_batch_playlist_menu = false; }
+
+        Rectangle {
+            x: 245px;
+            y: 90px;
+            width: 225px;
+            height: batch_pl_layout.preferred-height;
+            border-radius: 8px;
+            background: ThemePalette.bg_elevated;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: #00000066;
+
+            batch_pl_layout := VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+
+                // Header
+                Rectangle {
+                    height: 24px;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        Text {
+                            text: "Pilih Playlist Tujuan";
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: ThemePalette.text_muted;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Existing playlists (compact height, capped if very long)
+                if root.playlists.length > 0 : Flickable {
+                    height: Math.min(root.playlists.length * 32px, 192px);
+                    content-height: root.playlists.length * 32px;
+
+                    VerticalLayout {
+                        spacing: 2px;
+
+                        for pl in root.playlists : Rectangle {
+                            height: 30px;
+                            border-radius: 4px;
+                            background: bpl_item_t.has-hover ? ThemePalette.bg_hover : transparent;
+
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                spacing: 8px;
+                                alignment: space-between;
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+
+                                    IconDisplay {
+                                        icon: IconSet.ListMusic;
+                                        size: 13px;
+                                        stroke: ThemePalette.text_secondary;
+                                        stroke-width: 2.0;
+                                        y: (parent.height - self.height) / 2;
+                                    }
+
+                                    Text {
+                                        text: pl.name;
+                                        font-size: 12px;
+                                        color: ThemePalette.text_primary;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                Text {
+                                    text: pl.track_count + "";
+                                    font-size: 10px;
+                                    color: ThemePalette.text_muted;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            bpl_item_t := TouchArea {
+                                clicked => {
+                                    root.show_batch_playlist_menu = false;
+                                    root.add_selected_to_playlist(pl.id);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if root.playlists.length == 0 : Rectangle {
+                    height: 28px;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        Text {
+                            text: "Belum ada playlist";
+                            font-size: 11px;
+                            color: ThemePalette.text_muted;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                Rectangle { height: 1px; background: ThemePalette.border_subtle; }
+
+                // Create New Playlist from Selection
+                Rectangle {
+                    height: 32px;
+                    border-radius: 4px;
+                    background: bpl_new_t.has-hover ? ThemePalette.accent_subtle : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 8px;
+                        alignment: start;
+
+                        IconDisplay {
+                            icon: IconSet.FolderPlus;
+                            size: 13px;
+                            stroke: ThemePalette.accent_primary;
+                            stroke-width: 2.0;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        Text {
+                            text: "Buat Playlist Baru...";
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: ThemePalette.accent_primary;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    bpl_new_t := TouchArea {
+                        clicked => {
+                            root.show_batch_playlist_menu = false;
+                            root.new_playlist_name = "";
+                            root.new_playlist_for_selection = true;
+                            root.show_new_playlist_input = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================
+    // SWEET ALERT POP-UP: KONFIRMASI LAGU DUPLIKAT DI PLAYLIST
+    // =========================================================
+    if root.show_duplicate_alert : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #000000B3;
+        z: 1001;
+
+        TouchArea {
+            // Absorb backdrop clicks
+        }
+
+        Rectangle {
+            width: 400px;
+            height: dup_alert_layout.preferred-height;
+            border-radius: 16px;
+            background: ThemePalette.bg_surface;
+            border-width: 1px;
+            border-color: ThemePalette.border_subtle;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000088;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+
+            dup_alert_layout := VerticalLayout {
+                padding: 24px;
+                spacing: 16px;
+                alignment: center;
+
+                // Alert Icon Badge
+                Rectangle {
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 24px;
+                    background: #f59e0b22;
+                    border-width: 1px;
+                    border-color: #f59e0b66;
+                    x: (parent.width - self.width) / 2;
+
+                    IconDisplay {
+                        icon: IconSet.TriangleAlert;
+                        size: 24px;
+                        stroke: #f59e0b;
+                        stroke-width: 2.0;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                // Title & Description
+                VerticalLayout {
+                    spacing: 6px;
+                    alignment: center;
+
+                    Text {
+                        text: "Lagu Sudah Ada di Playlist";
+                        font-size: 16px;
+                        font-weight: 800;
+                        color: ThemePalette.text_primary;
+                        horizontal-alignment: center;
+                    }
+
+                    Text {
+                        text: root.duplicate_alert_message;
+                        font-size: 12px;
+                        color: ThemePalette.text_secondary;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+
+                // Action Buttons: Batal | Lewati yang Sama | Tetap Tambahkan
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: center;
+
+                    // Cancel
+                    Rectangle {
+                        height: 34px;
+                        border-radius: 17px;
+                        background: dup_cancel_t.has-hover ? ThemePalette.bg_elevated : transparent;
+                        border-width: 1px;
+                        border-color: ThemePalette.border_subtle;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            alignment: center;
+                            Text {
+                                text: "Batal";
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: ThemePalette.text_secondary;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        dup_cancel_t := TouchArea {
+                            clicked => {
+                                root.show_duplicate_alert = false;
+                                root.resolve_playlist_duplicate(0);
+                            }
+                        }
+                    }
+
+                    // Skip Duplicates
+                    Rectangle {
+                        height: 34px;
+                        border-radius: 17px;
+                        background: dup_skip_t.has-hover ? ThemePalette.bg_elevated : ThemePalette.bg_surface;
+                        border-width: 1px;
+                        border-color: ThemePalette.accent_primary;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            alignment: center;
+                            Text {
+                                text: "Lewati";
+                                font-size: 12px;
+                                font-weight: 700;
+                                color: ThemePalette.accent_primary;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        dup_skip_t := TouchArea {
+                            clicked => {
+                                root.show_duplicate_alert = false;
+                                root.resolve_playlist_duplicate(1);
+                            }
+                        }
+                    }
+
+                    // Add Anyway
+                    Rectangle {
+                        height: 34px;
+                        border-radius: 17px;
+                        background: dup_anyway_t.has-hover ? #e0522b : ThemePalette.accent_primary;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            alignment: center;
+                            Text {
+                                text: "Tetap Tambahkan";
+                                font-size: 12px;
+                                font-weight: 700;
+                                color: #FFFFFF;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        dup_anyway_t := TouchArea {
+                            clicked => {
+                                root.show_duplicate_alert = false;
+                                root.resolve_playlist_duplicate(2);
                             }
                         }
                     }

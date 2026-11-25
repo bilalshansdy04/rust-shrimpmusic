@@ -52,6 +52,8 @@ export component AppWindow inherits Window {
     in property <int> selected_track_id: -1;
     in property <int> active_playing_id: -1;
     in property <int> selected_count: 0;
+    in-out property <bool> show_duplicate_alert: false;
+    in property <string> duplicate_alert_message: "";
 
     in property <[LyricLineModel]> lyrics_lines: [];
     in property <bool> has_lyrics: false;
@@ -128,6 +130,8 @@ export component AppWindow inherits Window {
 
     callback on_create_playlist(string);
     callback on_create_playlist_and_add_track(string, int);
+    callback on_create_playlist_and_add_selected(string);
+    callback on_resolve_playlist_duplicate(int);
     callback on_rename_playlist(int, string);
     callback on_delete_playlist(int);
     callback on_play_playlist(int);
@@ -141,6 +145,7 @@ export component AppWindow inherits Window {
     callback on_toggle_folder(int, bool);
     callback on_remove_folder(int);
     callback on_rescan_folder(int);
+    callback on_rescan_all_folders();
     callback on_toggle_exclusive(bool);
     callback on_select_device(string);
     callback on_toggle_dark_mode(bool);
@@ -354,6 +359,8 @@ export component AppWindow inherits Window {
                         sort_criteria: root.library_sort_criteria;
                         sort_ascending: root.library_sort_ascending;
                         selected_count: root.selected_count;
+                        show_duplicate_alert <=> root.show_duplicate_alert;
+                        duplicate_alert_message: root.duplicate_alert_message;
 
                         track_selected(id) => { root.on_track_selected(id); }
                         track_double_clicked(id) => { root.on_track_double_clicked(id); }
@@ -368,6 +375,8 @@ export component AppWindow inherits Window {
                         delete_track_from_db(id) => { root.on_delete_track_from_db(id); }
                         delete_selected_from_db => { root.on_delete_selected_from_db(); }
                         create_playlist_with_tracks(name, t_id) => { root.on_create_playlist_and_add_track(name, t_id); }
+                        create_playlist_with_selected(name) => { root.on_create_playlist_and_add_selected(name); }
+                        resolve_playlist_duplicate(action) => { root.on_resolve_playlist_duplicate(action); }
                         toggle_select_track(id) => { root.on_toggle_select_track(id); }
                         select_all_tracks => { root.on_select_all_tracks(); }
                         clear_selection => { root.on_clear_selection(); }
@@ -462,11 +471,14 @@ export component AppWindow inherits Window {
             is_eq_enabled: root.is_eq_enabled;
             eq_bands: root.eq_bands;
             volume_balance_mode: root.volume_balance_mode;
+            is_scanning: root.is_scanning;
+            scan_status_text: root.scan_status_text;
 
             close_drawer => { root.is_settings_open = false; }
             toggle_folder(id, en) => { root.on_toggle_folder(id, en); }
             remove_folder(id) => { root.on_remove_folder(id); }
             rescan_folder(id) => { root.on_rescan_folder(id); }
+            rescan_all_folders => { root.on_rescan_all_folders(); }
             add_folder => { root.on_add_folder_clicked(); }
             toggle_exclusive(en) => { root.on_toggle_exclusive(en); }
             select_device(id) => { root.on_select_device(id); }

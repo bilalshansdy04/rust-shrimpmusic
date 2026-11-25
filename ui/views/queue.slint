@@ -341,8 +341,8 @@ export component QueueView inherits Rectangle {
                 spacing: 8px;
                 alignment: center;
 
-                // [ 🔀 Acak Ulang Antrean ] Reshuffle Button
-                if root.queue_items.length > 2 : Rectangle {
+                // [ 🔀 Acak Ulang Antrean ] Reshuffle Button (Only visible when Shuffle is active!)
+                if root.is_shuffle && root.queue_items.length > 2 : Rectangle {
                     height: 28px;
                     border-radius: 14px;
                     background: reshuf_touch.has-hover ? ThemePalette.accent_subtle : ThemePalette.bg_surface;

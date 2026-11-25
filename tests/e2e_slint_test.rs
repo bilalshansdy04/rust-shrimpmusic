@@ -192,3 +192,54 @@ fn test_e2e_slint_track_model_and_selection() {
     app.invoke_on_clear_selection();
     assert!(*cleared_selection.borrow());
 }
+
+#[test]
+fn test_e2e_slint_romanize_scope_flags() {
+    use shrimp_music::db::TrackRecord;
+    use shrimp_music::ui::ShrimpMusicApp;
+
+    i_slint_backend_testing::init_no_event_loop();
+    let app = AppWindow::new().expect("Failed to create AppWindow");
+
+    let tracks = vec![TrackRecord {
+        id: 1,
+        folder_id: 1,
+        path: "D:\\Music\\miniskirt.flac".to_string(),
+        title: "짧은 치마 (Miniskirt)".to_string(),
+        artist: "Hearts2Hearts (하츠투하츠)".to_string(),
+        album: "MINISKIRT".to_string(),
+        album_artist: None,
+        genre: None,
+        year: None,
+        track_number: Some(1),
+        disc_number: Some(1),
+        duration_ms: 179000,
+        sample_rate: 44100,
+        bit_depth: 16,
+        format: "FLAC".to_string(),
+        file_size: 1000,
+        modified_time: 1000,
+        thumbnail_path: None,
+        has_lyrics: false,
+        play_count: 0,
+        last_played_at: None,
+        waveform: None,
+        is_active: true,
+    }];
+
+    // Master ON, Title OFF, Artist OFF -> must preserve original Hangul!
+    app.set_show_romanized(true);
+    app.set_romanize_title(false);
+    app.set_romanize_artist(false);
+
+    let models_off = ShrimpMusicApp::convert_tracks_for_window(&tracks, &app);
+    assert_eq!(models_off[0].title, "짧은 치마 (Miniskirt)");
+    assert_eq!(models_off[0].artist, "Hearts2Hearts (하츠투하츠)");
+
+    // Master ON, Title ON, Artist OFF -> only title romanized
+    app.set_romanize_title(true);
+    app.set_romanize_artist(false);
+    let models_title_only = ShrimpMusicApp::convert_tracks_for_window(&tracks, &app);
+    assert_eq!(models_title_only[0].title, "jjalbeun chima (Miniskirt)");
+    assert_eq!(models_title_only[0].artist, "Hearts2Hearts (하츠투하츠)");
+}

@@ -15,7 +15,7 @@ use crate::db::{default_db_path, open_database, Database, SortCriteria, TrackRec
 use crate::library::scanner::{ScanProgress, Scanner};
 use crate::library::playlist::PlaylistManager;
 use crate::library::search::SearchEngine;
-use super::taskbar::TaskbarController;
+use super::taskbar::{TaskbarAction, TaskbarController};
 use super::tray::{TrayAction, TrayController};
 
 slint::include_modules!();
@@ -200,8 +200,69 @@ impl ShrimpMusicApp {
         app.refresh_playlists();
         app.setup_callbacks();
         app.setup_event_loop();
+        Self::refresh_jump_list_async(&app.db);
 
         Ok(app)
+    }
+
+    pub fn play_track_by_id(&self, track_id: i64) {
+        Self::play_track_from_jump_list(
+            track_id,
+            &self.db,
+            &self.queue,
+            &self.player,
+            &self.window.as_weak(),
+            self.active_scope.get(),
+            self.sort_criteria.get(),
+            self.sort_ascending.get(),
+        );
+    }
+
+    fn refresh_jump_list_async(db: &Database) {
+        if let Ok(recent) = db.get_recently_played(5) {
+            let items: Vec<(i64, String, String)> = recent
+                .into_iter()
+                .map(|t| (t.id, t.title, t.artist))
+                .collect();
+            std::thread::spawn(move || {
+                let tb = TaskbarController::new();
+                tb.update_jump_list(&items);
+            });
+        }
+    }
+
+    fn play_track_from_jump_list(
+        track_id: i64,
+        db: &Database,
+        queue: &RefCell<PlaybackQueue>,
+        player: &AudioPlayer,
+        win_weak: &slint::Weak<AppWindow>,
+        active_scope: Option<i64>,
+        sort_criteria: SortCriteria,
+        sort_ascending: bool,
+    ) {
+        if let Ok(Some(track)) = db.get_track_by_id(track_id) {
+            let scope = active_scope.or(Some(track.folder_id));
+            let mut queue_tracks = db
+                .list_tracks(scope, sort_criteria, sort_ascending)
+                .unwrap_or_default();
+            let mut start_idx = queue_tracks
+                .iter()
+                .position(|t| t.id == track.id)
+                .unwrap_or(0);
+            if queue_tracks.is_empty() {
+                queue_tracks = vec![track.clone()];
+                start_idx = 0;
+            }
+            {
+                let mut q = queue.borrow_mut();
+                q.set_items(queue_tracks, Some(start_idx));
+                if let Some(w) = win_weak.upgrade() {
+                    Self::sync_queue_to_ui(&q, &w);
+                }
+            }
+            Self::play_track_record(player, &track, win_weak, db);
+        }
     }
 
     pub fn run(&self) -> Result<(), slint::PlatformError> {
@@ -322,6 +383,15 @@ impl ShrimpMusicApp {
 
     pub fn convert_tracks_to_models_with_option(tracks: &[TrackRecord], romanize: bool) -> Vec<TrackItemModel> {
         Self::convert_tracks_to_models_detailed(tracks, romanize, true, true)
+    }
+
+    pub fn convert_tracks_for_window(tracks: &[TrackRecord], window: &AppWindow) -> Vec<TrackItemModel> {
+        Self::convert_tracks_to_models_detailed(
+            tracks,
+            window.get_show_romanized(),
+            window.get_romanize_title(),
+            window.get_romanize_artist(),
+        )
     }
 
     pub fn convert_tracks_to_models_detailed(
@@ -510,6 +580,9 @@ impl ShrimpMusicApp {
             if new_shuf {
                 // When enabling shuffle, re-order upcoming items so the queue view reflects the randomized order!
                 q.reshuffle_upcoming();
+            } else {
+                // When disabling shuffle, restore upcoming items to original sorted library/playlist order!
+                q.restore_original_order();
             }
             if let Some(w) = w6.upgrade() {
                 w.set_is_shuffle(new_shuf);
@@ -632,7 +705,7 @@ impl ShrimpMusicApp {
                 }
 
                 if let Ok(tracks) = db_scope.list_tracks(target_scope, app_sort.get(), app_asc.get()) {
-                    let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom.get(), true, true);
+                    let models = Self::convert_tracks_for_window(&tracks, &w);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                     w.set_selected_count(0);
                 }
@@ -659,7 +732,7 @@ impl ShrimpMusicApp {
                 w.set_library_sort_ascending(asc);
 
                 if let Ok(tracks) = db_sort.list_tracks(app_scope_sort.get(), criteria, asc) {
-                    let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_sort.get(), true, true);
+                    let models = Self::convert_tracks_for_window(&tracks, &w);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                     w.set_selected_count(0);
                 }
@@ -678,12 +751,12 @@ impl ShrimpMusicApp {
                 let trimmed = query.trim().to_string();
                 if trimmed.is_empty() {
                     if let Ok(tracks) = db_search.list_tracks(app_scope_s.get(), app_sort_s.get(), app_asc_s.get()) {
-                        let models = Self::convert_tracks_to_models_with_option(&tracks, app_rom_s.get());
+                        let models = Self::convert_tracks_for_window(&tracks, &w);
                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                     }
                 } else {
                     if let Ok(results) = SearchEngine::search(&db_search, &trimmed) {
-                        let models = Self::convert_tracks_to_models_with_option(&results.tracks, app_rom_s.get());
+                        let models = Self::convert_tracks_for_window(&results.tracks, &w);
                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                         w.set_active_view(0); // Switch to library view to see search results
                     }
@@ -760,7 +833,7 @@ impl ShrimpMusicApp {
                     w.set_playlist_sort_ascending(true);
                     if let Ok(items) = db_pl_sel.get_playlist_tracks(pl_id as i64) {
                         let tracks: Vec<TrackRecord> = items.into_iter().map(|item| item.track).collect();
-                        let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_pl_sel.get(), true, true);
+                        let models = Self::convert_tracks_for_window(&tracks, &w);
                         w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
                     }
                 }
@@ -831,7 +904,7 @@ impl ShrimpMusicApp {
             if let Some(w) = w_pl_rm.upgrade() {
                 if let Ok(items) = db_pl_rm.get_playlist_tracks(pl_id as i64) {
                     let tracks: Vec<TrackRecord> = items.into_iter().map(|item| item.track).collect();
-                    let models = Self::convert_tracks_to_models(&tracks);
+                    let models = Self::convert_tracks_for_window(&tracks, &w);
                     w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
                 }
                 Self::sync_playlists_to_ui(&db_pl_rm, &w);
@@ -853,7 +926,7 @@ impl ShrimpMusicApp {
                 if pl_id >= 0 {
                     if let Ok(items) = db_pl_sort.get_playlist_tracks_filtered(pl_id as i64, search_param, crit_id, asc) {
                         let tracks: Vec<TrackRecord> = items.into_iter().map(|item| item.track).collect();
-                        let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_pl_sort.get(), true, true);
+                        let models = Self::convert_tracks_for_window(&tracks, &w);
                         w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
                     }
                 }
@@ -874,7 +947,7 @@ impl ShrimpMusicApp {
                 if pl_id >= 0 {
                     if let Ok(items) = db_pl_search.get_playlist_tracks_filtered(pl_id as i64, search_param, crit_id, asc) {
                         let tracks: Vec<TrackRecord> = items.into_iter().map(|item| item.track).collect();
-                        let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_pl_s.get(), true, true);
+                        let models = Self::convert_tracks_for_window(&tracks, &w);
                         w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
                     }
                 }
@@ -895,12 +968,16 @@ impl ShrimpMusicApp {
             }
         });
 
+        let pending_pl_add: Rc<RefCell<Option<(i64, Vec<i64>)>>> = Rc::new(RefCell::new(None));
+
         let db_ctx_pl = db.clone();
         let w_ctx_pl = win_weak.clone();
+        let pend_ctx_pl = pending_pl_add.clone();
         self.window.on_on_add_to_playlist(move |playlist_id, track_id| {
-            let _ = db_ctx_pl.add_track_to_playlist(playlist_id as i64, track_id as i64);
+            let pl_id = playlist_id as i64;
+            let t_id = track_id as i64;
             if let Some(w) = w_ctx_pl.upgrade() {
-                Self::sync_playlists_to_ui(&db_ctx_pl, &w);
+                Self::try_add_tracks_to_playlist(&db_ctx_pl, &w, &pend_ctx_pl, pl_id, vec![t_id]);
             }
         });
 
@@ -921,7 +998,7 @@ impl ShrimpMusicApp {
             if let Some(w) = w_ctx_del.upgrade() {
                 Self::sync_queue_to_ui(&q, &w);
                 if let Ok(tracks) = db_ctx_del.list_tracks(app_scope_del.get(), app_sort_del.get(), app_asc_del.get()) {
-                    let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_del.get(), true, true);
+                    let models = Self::convert_tracks_for_window(&tracks, &w);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                 }
                 Self::sync_playlists_to_ui(&db_ctx_del, &w);
@@ -1006,17 +1083,92 @@ impl ShrimpMusicApp {
 
         let w_batch_pl = win_weak.clone();
         let db_batch_pl = db.clone();
+        let pend_batch_pl = pending_pl_add.clone();
         self.window.on_on_add_selected_to_playlist(move |playlist_id| {
             if let Some(w) = w_batch_pl.upgrade() {
                 let model = w.get_library_tracks();
+                let mut track_ids = Vec::new();
                 for i in 0..model.row_count() {
                     if let Some(tr) = model.row_data(i) {
                         if tr.is_selected {
-                            let _ = db_batch_pl.add_track_to_playlist(playlist_id as i64, tr.id as i64);
+                            track_ids.push(tr.id as i64);
                         }
                     }
                 }
-                Self::sync_playlists_to_ui(&db_batch_pl, &w);
+                if !track_ids.is_empty() {
+                    Self::try_add_tracks_to_playlist(
+                        &db_batch_pl,
+                        &w,
+                        &pend_batch_pl,
+                        playlist_id as i64,
+                        track_ids,
+                    );
+                }
+            }
+        });
+
+        let w_batch_create_pl = win_weak.clone();
+        let db_batch_create_pl = db.clone();
+        self.window.on_on_create_playlist_and_add_selected(move |name| {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                return;
+            }
+            if let Some(w) = w_batch_create_pl.upgrade() {
+                let model = w.get_library_tracks();
+                let mut track_ids = Vec::new();
+                for i in 0..model.row_count() {
+                    if let Some(tr) = model.row_data(i) {
+                        if tr.is_selected {
+                            track_ids.push(tr.id as i64);
+                        }
+                    }
+                }
+                if let Ok(new_pl_id) = db_batch_create_pl.create_playlist(trimmed, None, None) {
+                    if !track_ids.is_empty() {
+                        let _ = db_batch_create_pl.add_tracks_to_playlist_batch(
+                            new_pl_id,
+                            &track_ids,
+                            false,
+                        );
+                    }
+                    Self::sync_playlists_to_ui(&db_batch_create_pl, &w);
+                }
+            }
+        });
+
+        let w_dup_res = win_weak.clone();
+        let db_dup_res = db.clone();
+        let pend_dup_res = pending_pl_add.clone();
+        self.window.on_on_resolve_playlist_duplicate(move |action| {
+            let pending = pend_dup_res.borrow_mut().take();
+            if let Some((pl_id, track_ids)) = pending {
+                match action {
+                    1 => {
+                        // Skip duplicates
+                        let _ = db_dup_res.add_tracks_to_playlist_batch(pl_id, &track_ids, true);
+                    }
+                    2 => {
+                        // Add anyway
+                        let _ = db_dup_res.add_tracks_to_playlist_batch(pl_id, &track_ids, false);
+                    }
+                    _ => {
+                        // Cancel (0)
+                    }
+                }
+                if action == 1 || action == 2 {
+                    if let Some(w) = w_dup_res.upgrade() {
+                        Self::sync_playlists_to_ui(&db_dup_res, &w);
+                        if w.get_selected_playlist_id() == pl_id as i32 {
+                            if let Ok(items) = db_dup_res.get_playlist_tracks(pl_id) {
+                                let tracks: Vec<TrackRecord> =
+                                    items.into_iter().map(|item| item.track).collect();
+                                let models = Self::convert_tracks_for_window(&tracks, &w);
+                                w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -1047,7 +1199,7 @@ impl ShrimpMusicApp {
                 }
                 Self::sync_queue_to_ui(&q, &w);
                 if let Ok(tracks) = db_batch_del.list_tracks(app_scope_bdel.get(), app_sort_bdel.get(), app_asc_bdel.get()) {
-                    let models = Self::convert_tracks_to_models_detailed(&tracks, app_rom_bdel.get(), true, true);
+                    let models = Self::convert_tracks_for_window(&tracks, &w);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                 }
                 w.set_selected_count(0);
@@ -1082,7 +1234,7 @@ impl ShrimpMusicApp {
             if let Some(w) = w10.upgrade() {
                 Self::sync_folders_and_scopes_to_ui(&db10, &w, app_scope10.get());
                 if let Ok(tracks) = db10.list_tracks(app_scope10.get(), app_sort10.get(), app_asc10.get()) {
-                    let models = Self::convert_tracks_to_models(&tracks);
+                    let models = Self::convert_tracks_for_window(&tracks, &w);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                 }
             }
@@ -1333,12 +1485,13 @@ impl ShrimpMusicApp {
                             });
 
                             let scanner = Scanner::new();
-                            let _ = scanner.scan_folder(
+                            let _ = scanner.scan_folder_with_options(
                                 &worker_db,
                                 folder.id,
                                 &folder_path,
                                 None,
                                 Some(&prog_tx),
+                                true,
                             );
 
                             drop(prog_tx);
@@ -1349,12 +1502,88 @@ impl ShrimpMusicApp {
                                     w.set_is_scanning(false);
                                     Self::sync_folders_and_scopes_to_ui(&worker_db, &w, cur_scope);
                                     if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
-                                        let models = Self::convert_tracks_to_models_with_option(&tracks, cur_rom);
+                                        let models = Self::convert_tracks_for_window(&tracks, &w);
                                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                                     }
+                                    Self::reload_active_lyrics_if_playing(&worker_db, &w);
                                 }
                             });
                         }
+                    }
+                }
+            });
+        });
+
+        let w_rescan_all = win_weak.clone();
+        let app_scope_all = self.active_scope.clone();
+        let app_sort_all = self.sort_criteria.clone();
+        let app_asc_all = self.sort_ascending.clone();
+        let app_rom_all = self.show_romanized.clone();
+        self.window.on_on_rescan_all_folders(move || {
+            let win_c = w_rescan_all.clone();
+            let db_path = default_db_path();
+            let cur_scope = app_scope_all.get();
+            let cur_sort = app_sort_all.get();
+            let cur_asc = app_asc_all.get();
+            let cur_rom = app_rom_all.get();
+
+            std::thread::spawn(move || {
+                if let Ok(worker_db) = open_database(&db_path) {
+                    if let Ok(folders) = worker_db.get_all_folders() {
+                        let enabled_folders: Vec<_> =
+                            folders.into_iter().filter(|f| f.is_enabled).collect();
+                        if enabled_folders.is_empty() {
+                            return;
+                        }
+
+                        let win_start = win_c.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(w) = win_start.upgrade() {
+                                w.set_is_scanning(true);
+                                w.set_scan_status_text(SharedString::from(
+                                    "Menyegarkan ulang seluruh pustaka & lirik...",
+                                ));
+                            }
+                        });
+
+                        let scanner = Scanner::new();
+                        for (idx, folder) in enabled_folders.iter().enumerate() {
+                            let folder_path = std::path::PathBuf::from(&folder.folder_path);
+                            if !folder_path.exists() {
+                                continue;
+                            }
+                            let w_p = win_c.clone();
+                            let total_f = enabled_folders.len();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(w) = w_p.upgrade() {
+                                    w.set_scan_status_text(SharedString::from(format!(
+                                        "Menyegarkan folder {} dari {}...",
+                                        idx + 1,
+                                        total_f
+                                    )));
+                                }
+                            });
+                            let _ = scanner.scan_folder_with_options(
+                                &worker_db,
+                                folder.id,
+                                &folder_path,
+                                None,
+                                None,
+                                true,
+                            );
+                        }
+
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(w) = win_c.upgrade() {
+                                w.set_is_scanning(false);
+                                Self::sync_folders_and_scopes_to_ui(&worker_db, &w, cur_scope);
+                                if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
+                                    let models = Self::convert_tracks_for_window(&tracks, &w);
+                                    w.set_library_tracks(ModelRc::new(VecModel::from(models)));
+                                }
+                                Self::reload_active_lyrics_if_playing(&worker_db, &w);
+                            }
+                        });
                     }
                 }
             });
@@ -1420,6 +1649,18 @@ impl ShrimpMusicApp {
                 if let Ok(tracks) = db.list_tracks(app_scope.get(), app_sort.get(), app_asc.get()) {
                     let models = Self::convert_tracks_to_models_detailed(&tracks, en, r_title, r_artist);
                     w.set_library_tracks(ModelRc::new(VecModel::from(models)));
+                }
+                let sel_pl_id = w.get_selected_playlist_id();
+                if sel_pl_id >= 0 {
+                    let crit_id = w.get_playlist_sort_criteria();
+                    let asc = w.get_playlist_sort_ascending();
+                    let q_str = w.get_playlist_search_query().to_string();
+                    let search_param = if q_str.trim().is_empty() { None } else { Some(q_str.as_str()) };
+                    if let Ok(items) = db.get_playlist_tracks_filtered(sel_pl_id as i64, search_param, crit_id, asc) {
+                        let tracks: Vec<TrackRecord> = items.into_iter().map(|item| item.track).collect();
+                        let models = Self::convert_tracks_to_models_detailed(&tracks, en, r_title, r_artist);
+                        w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
+                    }
                 }
                 let q = q_ref.borrow();
                 Self::sync_queue_to_ui_detailed(&q, w, en, r_title, r_artist);
@@ -1637,7 +1878,7 @@ impl ShrimpMusicApp {
 
                                     // 2. Refresh library tracks
                                     if let Ok(tracks) = worker_db.list_tracks(cur_scope, cur_sort, cur_asc) {
-                                        let models = Self::convert_tracks_to_models_with_option(&tracks, cur_rom);
+                                        let models = Self::convert_tracks_for_window(&tracks, &w);
                                         w.set_library_tracks(ModelRc::new(VecModel::from(models)));
                                     }
                                 }
@@ -1713,6 +1954,90 @@ impl ShrimpMusicApp {
         });
     }
 
+    fn try_add_tracks_to_playlist(
+        db: &Database,
+        w: &AppWindow,
+        pending_slot: &Rc<RefCell<Option<(i64, Vec<i64>)>>>,
+        playlist_id: i64,
+        track_ids: Vec<i64>,
+    ) {
+        if track_ids.is_empty() {
+            return;
+        }
+        let mut dup_count = 0usize;
+        for &tid in &track_ids {
+            if db.is_track_in_playlist(playlist_id, tid).unwrap_or(false) {
+                dup_count += 1;
+            }
+        }
+
+        if dup_count == 0 {
+            let _ = db.add_tracks_to_playlist_batch(playlist_id, &track_ids, false);
+            Self::sync_playlists_to_ui(db, w);
+            if w.get_selected_playlist_id() == playlist_id as i32 {
+                if let Ok(items) = db.get_playlist_tracks(playlist_id) {
+                    let tracks: Vec<TrackRecord> =
+                        items.into_iter().map(|item| item.track).collect();
+                    let models = Self::convert_tracks_for_window(&tracks, w);
+                    w.set_playlist_tracks(ModelRc::new(VecModel::from(models)));
+                }
+            }
+        } else {
+            let pl_name = db
+                .get_playlist(playlist_id)
+                .ok()
+                .flatten()
+                .map(|p| p.name)
+                .unwrap_or_else(|| "Playlist".to_string());
+
+            let msg = if track_ids.len() == 1 {
+                format!(
+                    "Lagu yang dipilih sudah ada di playlist \"{}\". Tetap tambahkan atau lewati?",
+                    pl_name
+                )
+            } else {
+                format!(
+                    "{} dari {} lagu yang dipilih sudah ada di playlist \"{}\". Lewati lagu yang sama atau tetap tambahkan semua?",
+                    dup_count,
+                    track_ids.len(),
+                    pl_name
+                )
+            };
+
+            *pending_slot.borrow_mut() = Some((playlist_id, track_ids));
+            w.set_duplicate_alert_message(SharedString::from(msg));
+            w.set_show_duplicate_alert(true);
+        }
+    }
+
+    fn reload_active_lyrics_if_playing(db: &Database, w: &AppWindow) {
+        let active_id = w.get_active_playing_id();
+        if active_id < 0 {
+            return;
+        }
+        let rom = w.get_show_romanized();
+        let rom_lyrics = w.get_romanize_lyrics();
+        if let Ok(Some(lyrics_rec)) = db.get_lyrics(active_id as i64) {
+            w.set_has_lyrics(true);
+            let line_models: Vec<LyricLineModel> = lyrics_rec
+                .lines
+                .iter()
+                .map(|l| {
+                    let text = Self::format_text_display(&l.text, rom && rom_lyrics);
+                    LyricLineModel {
+                        timestamp_ms: l.timestamp_ms as i32,
+                        text: SharedString::from(text),
+                        is_active: false,
+                    }
+                })
+                .collect();
+            w.set_lyrics_lines(ModelRc::new(VecModel::from(line_models)));
+        } else {
+            w.set_has_lyrics(false);
+            w.set_lyrics_lines(ModelRc::new(VecModel::from(Vec::<LyricLineModel>::new())));
+        }
+    }
+
     fn play_track_record(
         player: &AudioPlayer,
         track: &TrackRecord,
@@ -1727,6 +2052,7 @@ impl ShrimpMusicApp {
             .unwrap_or_default()
             .as_secs() as i64;
         let _ = db.increment_play_count(track.id, now);
+        Self::refresh_jump_list_async(db);
 
         if let Some(w) = window.upgrade() {
             let rom = w.get_show_romanized();
@@ -1738,8 +2064,8 @@ impl ShrimpMusicApp {
             let artist = Self::format_text_display(&track.artist, rom && rom_artist);
             let album = Self::format_text_display(&track.album, rom && rom_title);
 
-            w.set_track_title(SharedString::from(title));
-            w.set_track_artist(SharedString::from(artist));
+            w.set_track_title(SharedString::from(title.clone()));
+            w.set_track_artist(SharedString::from(artist.clone()));
             w.set_track_album(SharedString::from(album));
             w.set_audio_format(SharedString::from(track.format.clone()));
             w.set_bit_depth(track.bit_depth as i32);
@@ -1747,6 +2073,16 @@ impl ShrimpMusicApp {
             w.set_duration_ms(track.duration_ms as i32);
             w.set_active_playing_id(track.id as i32);
             w.set_is_playing(true);
+
+            // Update Window title so Taskbar hover thumbnail displays current playing track
+            let win_title = if artist.trim().is_empty() || artist == "Unknown Artist" {
+                format!("{} • ShrimpMusic Player", title)
+            } else {
+                format!("{} — {} • ShrimpMusic Player", title, artist)
+            };
+            let _ = w.window().with_winit_window(|win| {
+                win.set_title(&win_title);
+            });
 
             // Instrumental detection
             let genre_lower = track.genre.as_deref().unwrap_or("").to_lowercase();
@@ -1855,12 +2191,84 @@ impl ShrimpMusicApp {
         let last_scroll = self.last_lyrics_scroll_time.clone();
         let vol_ctrl = self.win_volume.clone();
         let dev_watcher = self.device_watcher.clone();
+        let app_scope_ev = self.active_scope.clone();
+        let app_sort_ev = self.sort_criteria.clone();
+        let app_asc_ev = self.sort_ascending.clone();
+        let taskbar_attached = Rc::new(Cell::new(false));
 
         self._timer.start(
             slint::TimerMode::Repeated,
             Duration::from_millis(50),
             move || {
                 let Some(w) = win_weak.upgrade() else { return };
+
+                // -3. Attach Windows Taskbar Thumbnail Toolbar once native HWND is ready
+                if !taskbar_attached.get() {
+                    let mut found_hwnd: Option<isize> = None;
+                    let _ = w.window().with_winit_window(|win| {
+                        use i_slint_backend_winit::winit::raw_window_handle::{
+                            HasWindowHandle, RawWindowHandle,
+                        };
+                        if let Ok(handle) = win.window_handle() {
+                            if let RawWindowHandle::Win32(win32) = handle.as_raw() {
+                                found_hwnd = Some(win32.hwnd.get());
+                            }
+                        }
+                    });
+                    if let Some(hwnd) = found_hwnd {
+                        taskbar.borrow_mut().attach_window(hwnd);
+                        taskbar_attached.set(true);
+                    }
+                }
+
+                // -2b. Poll Windows Taskbar Thumbnail Buttons & Jump List IPC
+                while let Some(tb_action) = {
+                    let tb = taskbar.borrow();
+                    tb.poll_actions()
+                } {
+                    match tb_action {
+                        TaskbarAction::Previous => {
+                            let mut q = q_ref.borrow_mut();
+                            if let Some(track) = q.previous().cloned() {
+                                Self::sync_queue_to_ui(&q, &w);
+                                drop(q);
+                                Self::play_track_record(&player, &track, &win_weak, &db);
+                            }
+                        }
+                        TaskbarAction::PlayPause => {
+                            if w.get_is_playing() {
+                                let _ = player.pause();
+                            } else {
+                                let _ = player.resume();
+                            }
+                        }
+                        TaskbarAction::Next => {
+                            let mut q = q_ref.borrow_mut();
+                            if let Some(track) = q.next().cloned() {
+                                Self::sync_queue_to_ui(&q, &w);
+                                drop(q);
+                                Self::play_track_record(&player, &track, &win_weak, &db);
+                            }
+                        }
+                        TaskbarAction::PlayTrack(track_id) => {
+                            let _ = w.window().with_winit_window(|win| {
+                                win.set_visible(true);
+                                win.set_minimized(false);
+                                let _ = win.focus_window();
+                            });
+                            Self::play_track_from_jump_list(
+                                track_id,
+                                &db,
+                                &q_ref,
+                                &player,
+                                &win_weak,
+                                app_scope_ev.get(),
+                                app_sort_ev.get(),
+                                app_asc_ev.get(),
+                            );
+                        }
+                    }
+                }
 
                 // -2. Real-Time Audio Device Hotplug Monitoring (USB DAC / Type-C converter plug/unplug)
                 if let Some(devs) = dev_watcher.poll_devices_changed() {

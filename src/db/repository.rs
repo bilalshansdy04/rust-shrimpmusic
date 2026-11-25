@@ -23,12 +23,14 @@ impl Database {
     // --- Folders ---
 
     pub fn add_folder(&self, path: &str) -> Result<i64> {
-        self.conn.execute(
+        let id: i64 = self.conn.query_row(
             "INSERT INTO library_folders (folder_path, is_enabled) VALUES (?1, 1)
-             ON CONFLICT(folder_path) DO UPDATE SET is_enabled = 1",
+             ON CONFLICT(folder_path) DO UPDATE SET is_enabled = 1
+             RETURNING id",
             params![path],
+            |row| row.get(0),
         )?;
-        Ok(self.conn.last_insert_rowid())
+        Ok(id)
     }
 
     pub fn remove_folder(&self, folder_id: i64) -> Result<()> {
@@ -97,7 +99,7 @@ impl Database {
     // --- Tracks ---
 
     pub fn upsert_track(&self, track: &TrackRecord) -> Result<i64> {
-        self.conn.execute(
+        let id: i64 = self.conn.query_row(
             r#"
             INSERT INTO tracks (
                 folder_id, path, title, artist, album, album_artist, genre, year,
@@ -126,6 +128,7 @@ impl Database {
                 thumbnail_path = COALESCE(excluded.thumbnail_path, tracks.thumbnail_path),
                 has_lyrics = excluded.has_lyrics,
                 is_active = 1
+            RETURNING id
             "#,
             params![
                 track.folder_id,
@@ -148,8 +151,9 @@ impl Database {
                 if track.has_lyrics { 1 } else { 0 },
                 track.play_count as i64,
             ],
+            |row| row.get(0),
         )?;
-        Ok(self.conn.last_insert_rowid())
+        Ok(id)
     }
 
     pub fn get_track_by_path(&self, path: &str) -> Result<Option<TrackRecord>> {
@@ -354,6 +358,27 @@ impl Database {
         Ok(())
     }
 
+    pub fn get_recently_played(&self, limit: usize) -> Result<Vec<TrackRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT t.id, t.folder_id, t.path, t.title, t.artist, t.album, t.album_artist,
+                    t.genre, t.year, t.track_number, t.disc_number, t.duration_ms,
+                    t.sample_rate, t.bit_depth, t.format, t.file_size, t.modified_time,
+                    t.thumbnail_path, t.has_lyrics, t.play_count, t.last_played_at,
+                    CASE WHEN f.is_enabled = 1 AND t.is_active = 1 THEN 1 ELSE 0 END as is_active
+             FROM tracks t
+             JOIN library_folders f ON t.folder_id = f.id
+             WHERE t.last_played_at IS NOT NULL AND f.is_enabled = 1 AND t.is_active = 1
+             ORDER BY t.last_played_at DESC
+             LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit as i64], Self::map_track_row)?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
     pub fn prune_deleted_tracks(&self, folder_id: i64, valid_paths: &[String]) -> Result<usize> {
         if valid_paths.is_empty() {
             let count = self.conn.execute(
@@ -546,6 +571,42 @@ impl Database {
             params![playlist_id, track_id, next_order],
         )?;
         Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn is_track_in_playlist(&self, playlist_id: i64, track_id: i64) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = ?1 AND track_id = ?2",
+            params![playlist_id, track_id],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    pub fn add_tracks_to_playlist_batch(
+        &self,
+        playlist_id: i64,
+        track_ids: &[i64],
+        skip_duplicates: bool,
+    ) -> Result<usize> {
+        let mut next_order: i64 = self.conn.query_row(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM playlist_tracks WHERE playlist_id = ?1",
+            params![playlist_id],
+            |row| row.get(0),
+        )?;
+
+        let mut added = 0;
+        for &track_id in track_ids {
+            if skip_duplicates && self.is_track_in_playlist(playlist_id, track_id)? {
+                continue;
+            }
+            self.conn.execute(
+                "INSERT INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?1, ?2, ?3)",
+                params![playlist_id, track_id, next_order],
+            )?;
+            next_order += 1;
+            added += 1;
+        }
+        Ok(added)
     }
 
     pub fn remove_track_from_playlist(&self, playlist_id: i64, track_id: i64) -> Result<()> {
