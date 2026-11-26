@@ -81,5 +81,22 @@ pub fn initialize_database(conn: &Connection) -> Result<()> {
     // Safe migration for waveform_data on existing DBs
     let _ = conn.execute("ALTER TABLE tracks ADD COLUMN waveform_data BLOB", []);
 
+    // One-time invalidation of legacy max-peak waveforms so tracks regenerate with dynamic RMS
+    let wf_ver: Option<String> = conn
+        .query_row(
+            "SELECT value FROM user_preferences WHERE key = 'waveform_algo_version'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+    if wf_ver.as_deref() != Some("2") {
+        let _ = conn.execute("UPDATE tracks SET waveform_data = NULL", []);
+        let _ = conn.execute(
+            "INSERT INTO user_preferences (key, value) VALUES ('waveform_algo_version', '2')
+             ON CONFLICT(key) DO UPDATE SET value = '2'",
+            [],
+        );
+    }
+
     Ok(())
 }
