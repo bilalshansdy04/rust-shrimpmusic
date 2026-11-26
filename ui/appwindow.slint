@@ -84,6 +84,7 @@ export component AppWindow inherits Window {
     in property <bool> is_audiophile_modal_visible: false;
     in property <bool> is_scanning: false;
     in property <string> scan_status_text: "Memindai folder musik...";
+    in property <string> app_version: "v1.2.0";
     in property <int> library_sort_criteria: 0;
     in property <bool> library_sort_ascending: true;
     in property <bool> show_romanized: false;
@@ -469,6 +470,7 @@ export component AppWindow inherits Window {
             romanize_artist: root.romanize_artist;
             romanize_lyrics: root.romanize_lyrics;
             is_eq_enabled: root.is_eq_enabled;
+            app_version: root.app_version;
             eq_bands: root.eq_bands;
             volume_balance_mode: root.volume_balance_mode;
             is_scanning: root.is_scanning;

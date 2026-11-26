@@ -36,6 +36,7 @@ export component SettingsDrawer inherits Rectangle {
     in property <int> volume_balance_mode: 0;
     in property <bool> is_scanning: false;
     in property <string> scan_status_text: "";
+    in property <string> app_version: "v1.2.0";
 
     callback close_drawer();
     callback toggle_folder(int, bool);
@@ -1268,7 +1269,7 @@ export component SettingsDrawer inherits Rectangle {
                 alignment: start;
 
                 Rectangle {
-                    height: 110px;
+                    height: 128px;
                     vertical-stretch: 0;
                     background: ThemePalette.bg_elevated;
                     border-radius: 12px;
@@ -1285,6 +1286,14 @@ export component SettingsDrawer inherits Rectangle {
                             font-size: 15px;
                             font-weight: 800;
                             color: ThemePalette.text_primary;
+                            horizontal-alignment: center;
+                        }
+
+                        Text {
+                            text: "Versi " + root.app_version;
+                            font-size: 12px;
+                            font-weight: 700;
+                            color: ThemePalette.accent_primary;
                             horizontal-alignment: center;
                         }
 
