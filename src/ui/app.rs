@@ -43,6 +43,7 @@ pub struct ShrimpMusicApp {
 impl ShrimpMusicApp {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let window = AppWindow::new()?;
+        window.set_app_version(format!("v{}", env!("CARGO_PKG_VERSION")).into());
         let db_path = default_db_path();
         let db = Rc::new(open_database(&db_path)?);
 
